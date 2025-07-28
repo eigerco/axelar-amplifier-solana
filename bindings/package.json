@@ -1,5 +1,5 @@
 {
-  "name": "@eiger/solana-axelar-js",
+  "name": "@eigerco/solana-axelar-js",
   "description": "Bindings for solana-axelar programs",
   "version": "0.1.0",
   "author": "",

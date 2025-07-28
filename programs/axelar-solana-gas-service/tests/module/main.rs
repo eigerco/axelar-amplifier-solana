@@ -11,7 +11,6 @@
 )]
 
 mod initialize;
-mod transfer_operatorship;
 
 mod native {
     mod add_gas;

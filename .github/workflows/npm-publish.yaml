@@ -5,7 +5,7 @@ permissions:
 on:
   push:
     tags:
-      - 'solana-axelar-js-v*.*.*'
+      - 'axelar-amplifier-solana-js-v*.*.*'
 
 jobs:
   publish:
@@ -23,7 +23,7 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/solana-axelar-js-v}
+          VERSION=${GITHUB_REF#refs/tags/axelar-amplifier-solana-js-v}
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Check package.json version matches tag

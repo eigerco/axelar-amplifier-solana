@@ -1,59 +1,53 @@
 [workspace]
-allow_dirty = false # allow updating repositories with uncommitted changes
-changelog_update = true # disable changelog updates
-dependencies_update = false # update dependencies with `cargo update`
-git_release_enable = true # disable GitHub/Gitea releases
-pr_branch_prefix = "release-" # PR branch prefix
-pr_labels = ["release"] # add the `release` label to the release Pull Request
-publish_allow_dirty = false # add `--allow-dirty` to `cargo publish`
-semver_check = true # disable API breaking changes checks
-publish_timeout = "10m" # set a timeout for `cargo publish`
-#release_commits = "^feat:" # prepare release only if at least one commit matches a regex
+allow_dirty = false
+changelog_update = true
+dependencies_update = false
+git_release_enable = true
+pr_branch_prefix = "release-"
+pr_labels = ["release"]
+publish_allow_dirty = false
+semver_check = true
+publish_timeout = "10m"
 
-[[package]] # the double square brackets define a TOML table array
+[[package]]
 name = "axelar-solana-gas-service"
-#changelog_include = ["package_b"] # include commits from `package_b` in the changelog
-changelog_path = "CHANGELOG.md" # use a custom changelog path for `package_a`
-changelog_update = true # enable changelog update for `package_a`
-publish_all_features = true # add `--all-features` to `cargo publish` for `package_b`
-git_release_enable = true # enable GitHub/Gitea releases for `package_a`
-publish = false # disable `cargo publish` for `package_a`
+changelog_path = "CHANGELOG.md"
+changelog_update = true
+publish_all_features = true
+git_release_enable = true
+publish = false
 
 [[package]]
 name = "axelar-solana-gateway"
-#changelog_include = ["package_b"] # include commits from `package_b` in the changelog
-changelog_path = "CHANGELOG.md" # use a custom changelog path for `package_a`
-changelog_update = true # enable changelog update for `package_a`
-publish_all_features = true # add `--all-features` to `cargo publish` for `package_b`
-git_release_enable = true # enable GitHub/Gitea releases for `package_a`
-publish = false # disable `cargo publish` for `package_a`
+changelog_path = "CHANGELOG.md"
+changelog_update = true
+publish_all_features = true
+git_release_enable = true
+publish = false
 
 [[package]]
 name = "axelar-solana-governance"
-#changelog_include = ["package_b"] # include commits from `package_b` in the changelog
-changelog_path = "CHANGELOG.md" # use a custom changelog path for `package_a`
-changelog_update = true # enable changelog update for `package_a`
-publish_all_features = true # add `--all-features` to `cargo publish` for `package_b`
-git_release_enable = true # enable GitHub/Gitea releases for `package_a`
-publish = false # disable `cargo publish` for `package_a`
+changelog_path = "CHANGELOG.md"
+changelog_update = true
+publish_all_features = true
+git_release_enable = true
+publish = false
 
 [[package]]
 name = "axelar-solana-its"
-#changelog_include = ["package_b"] # include commits from `package_b` in the changelog
-changelog_path = "CHANGELOG.md" # use a custom changelog path for `package_a`
-changelog_update = true # enable changelog update for `package_a`
-publish_all_features = true # add `--all-features` to `cargo publish` for `package_b`
-git_release_enable = true # enable GitHub/Gitea releases for `package_a`
-publish = false # disable `cargo publish` for `package_a`
+changelog_path = "CHANGELOG.md"
+changelog_update = true
+publish_all_features = true
+git_release_enable = true
+publish = false
 
 [[package]]
 name = "axelar-solana-multicall"
-#changelog_include = ["package_b"] # include commits from `package_b` in the changelog
-changelog_path = "CHANGELOG.md" # use a custom changelog path for `package_a`
-changelog_update = true # enable changelog update for `package_a`
-publish_all_features = true # add `--all-features` to `cargo publish` for `package_b`
-git_release_enable = true # enable GitHub/Gitea releases for `package_a`
-publish = false # disable `cargo publish` for `package_a`
+changelog_path = "CHANGELOG.md"
+changelog_update = true
+publish_all_features = true
+git_release_enable = true
+publish = false
 
 [changelog]
-protect_breaking_commits = true # always include commits with breaking changes in the changelog
+protect_breaking_commits =

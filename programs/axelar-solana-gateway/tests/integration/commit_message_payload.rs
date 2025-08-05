@@ -13,7 +13,7 @@ use solana_sdk::transaction::TransactionError;
 
 #[tokio::test]
 #[allow(clippy::as_conversions)]
-async fn fail_commit_message_payload_pda_payload_hash_missmatch() {
+async fn fail_commit_message_payload_pda_payload_hash_mismatch() {
     const PAYLOAD_SIZE: usize = 1024;
 
     // Setup: Test runner
@@ -58,7 +58,10 @@ async fn fail_commit_message_payload_pda_payload_hash_missmatch() {
     .unwrap();
     let tx = runner.send_tx(&[ix]).await.unwrap_err();
     let error = tx.result.unwrap_err();
-    assert_eq!(error, TransactionError::InstructionError(0, InstructionError::InvalidAccountData));
+    assert_eq!(
+        error,
+        TransactionError::InstructionError(0, InstructionError::InvalidAccountData)
+    );
 }
 
 #[tokio::test]

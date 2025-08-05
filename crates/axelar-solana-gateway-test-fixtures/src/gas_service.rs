@@ -6,7 +6,7 @@ use axelar_solana_gateway::BytemuckedPda;
 use gateway_event_stack::{MatchContext, ProgramInvocationState};
 use solana_program_test::{tokio, BanksTransactionResultWithMetadata};
 use solana_sdk::{
-    account::ReadableAccount, keccak, program_pack::Pack, pubkey::Pubkey, signature::Keypair,
+    account::ReadableAccount, program_pack::Pack, pubkey::Pubkey, signature::Keypair,
     signer::Signer, system_instruction,
 };
 use spl_associated_token_account::get_associated_token_address_with_program_id;
@@ -16,12 +16,10 @@ use spl_token_2022::{extension::ExtensionType, state::Mint};
 pub struct GasServiceUtils {
     /// upgrade authority of the program
     pub upgrade_authority: Keypair,
-    /// the config authorty
-    pub config_authority: Keypair,
+    /// gas service operator
+    pub operator: Keypair,
     /// PDA of the gas service config
     pub config_pda: Pubkey,
-    /// salt to derive the config pda
-    pub salt: [u8; 32],
 }
 
 impl TestFixture {
@@ -47,19 +45,13 @@ impl TestFixture {
 
     /// Initialise a new gas config and return a utility tracker struct for it
     pub fn setup_default_gas_config(&mut self, upgrade_authority: Keypair) -> GasServiceUtils {
-        let config_authority = Keypair::new();
-        let salt = keccak::hash(b"my gas service").0;
-        let (config_pda, ..) = axelar_solana_gas_service::get_config_pda(
-            &axelar_solana_gas_service::ID,
-            &salt,
-            &config_authority.pubkey(),
-        );
+        let operator = Keypair::new();
+        let (config_pda, ..) = axelar_solana_gas_service::get_config_pda();
 
         GasServiceUtils {
             upgrade_authority,
-            config_authority,
+            operator,
             config_pda,
-            salt,
         }
     }
 
@@ -68,30 +60,21 @@ impl TestFixture {
         &mut self,
         utils: &GasServiceUtils,
     ) -> Result<BanksTransactionResultWithMetadata, BanksTransactionResultWithMetadata> {
-        self.init_gas_config_with_params(
-            utils.config_authority.insecure_clone(),
-            utils.config_pda,
-            utils.salt,
-        )
-        .await
+        self.init_gas_config_with_params(utils.operator.insecure_clone())
+            .await
     }
 
     /// init the gas service with raw params
     pub async fn init_gas_config_with_params(
         &mut self,
-        config_authority: Keypair,
-        config_pda: Pubkey,
-        salt: [u8; 32],
+        operator: Keypair,
     ) -> Result<BanksTransactionResultWithMetadata, BanksTransactionResultWithMetadata> {
         let ix = axelar_solana_gas_service::instructions::init_config(
-            &axelar_solana_gas_service::ID,
             &self.payer.pubkey(),
-            &config_authority.pubkey(),
-            &config_pda,
-            salt,
+            &operator.pubkey(),
         )
         .unwrap();
-        self.send_tx_with_custom_signers(&[ix], &[config_authority, self.payer.insecure_clone()])
+        self.send_tx_with_custom_signers(&[ix], &[operator, self.payer.insecure_clone()])
             .await
     }
 

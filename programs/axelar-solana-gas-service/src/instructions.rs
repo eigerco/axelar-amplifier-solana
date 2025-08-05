@@ -18,13 +18,18 @@ pub enum GasServiceInstruction {
     ///
     /// Accounts expected:
     /// 0. `[signer, writable]` The account (`payer`) paying for PDA creation
-    /// 1. `[]` The `authority` account of this PDA.
-    /// 1. `[writable]` The `config_pda` account to be created.
-    /// 2. `[]` The `system_program` account.
-    Initialize {
-        /// A unique 32-byte array used as a seed in deriving the config PDA.
-        salt: [u8; 32],
-    },
+    /// 1. `[]` The `operator` account of this PDA.
+    /// 2. `[writable]` The `config_pda` account to be created.
+    /// 3. `[]` The `system_program` account.
+    Initialize,
+
+    /// Transfer operatorship of the gas service to a new operator.
+    ///
+    /// Accounts expected:
+    /// 0. `[signer, writable]` The current `operator` account
+    /// 1. `[]` The new `operator` account to transfer operatorship to
+    /// 2. `[writable]` The `config_pda` account
+    TransferOperatorship,
 
     /// Use SPL tokens to pay for gas-related operations.
     SplToken(PayWithSplToken),
@@ -69,7 +74,7 @@ pub enum PayWithSplToken {
         refund_address: Pubkey,
     },
 
-    /// Collect fees that have accrued in SPL tokens (authority only).
+    /// Collect fees that have accrued in SPL tokens (operator only).
     CollectFees {
         /// The amount of SPL tokens to be collected as fees.
         amount: u64,
@@ -77,7 +82,7 @@ pub enum PayWithSplToken {
         decimals: u8,
     },
 
-    /// Refund previously collected SPL token fees (authority only).
+    /// Refund previously collected SPL token fees (operator only).
     Refund {
         /// A 64-byte unique transaction identifier
         tx_hash: [u8; 64],
@@ -132,10 +137,10 @@ pub enum PayWithNativeToken {
         refund_address: Pubkey,
     },
 
-    /// Collect accrued native SOL fees (authority only).
+    /// Collect accrued native SOL fees (operator only).
     ///
     /// Accounts expected:
-    /// 1. `[signer, read-only]` The `authority` account authorized to collect fees.
+    /// 1. `[signer, read-only]` The `operator` account authorized to collect fees.
     /// 2. `[writable]` The `config_pda` account holding the accrued lamports to collect.
     /// 3. `[writable]` The `receiver` account where the collected lamports will be sent.
     CollectFees {
@@ -143,10 +148,10 @@ pub enum PayWithNativeToken {
         amount: u64,
     },
 
-    /// Refund previously collected native SOL fees (authority only).
+    /// Refund previously collected native SOL fees (operator only).
     ///
     /// Accounts expected:
-    /// 1. `[signer, read-only]` The `authority` account authorized to issue refunds.
+    /// 1. `[signer, read-only]` The `operator` account authorized to issue refunds.
     /// 2. `[writable]` The `receiver` account that will receive the refunded lamports.
     /// 3. `[writable]` The `config_pda` account from which lamports are refunded.
     Refund {
@@ -163,24 +168,43 @@ pub enum PayWithNativeToken {
 ///
 /// # Errors
 /// - ix data cannot be serialized
-pub fn init_config(
-    program_id: &Pubkey,
-    payer: &Pubkey,
-    authority: &Pubkey,
-    config_pda: &Pubkey,
-    salt: [u8; 32],
-) -> Result<Instruction, ProgramError> {
-    let ix_data = borsh::to_vec(&GasServiceInstruction::Initialize { salt })?;
+pub fn init_config(payer: &Pubkey, operator: &Pubkey) -> Result<Instruction, ProgramError> {
+    let ix_data = borsh::to_vec(&GasServiceInstruction::Initialize)?;
+    let (config_pda, _bump) = crate::get_config_pda();
 
     let accounts = vec![
         AccountMeta::new(*payer, true),
-        AccountMeta::new_readonly(*authority, true),
-        AccountMeta::new(*config_pda, false),
+        AccountMeta::new_readonly(*operator, true),
+        AccountMeta::new(config_pda, false),
         AccountMeta::new_readonly(system_program::ID, false),
     ];
 
     Ok(Instruction {
-        program_id: *program_id,
+        program_id: crate::ID,
+        accounts,
+        data: ix_data,
+    })
+}
+
+/// Builds an instruction to transfer operatorship of the gas service.
+///
+/// # Errors
+/// - if the instruction could not be serialized
+pub fn transfer_operatorship(
+    current_operator: &Pubkey,
+    new_operator: &Pubkey,
+) -> Result<Instruction, ProgramError> {
+    let ix_data = borsh::to_vec(&GasServiceInstruction::TransferOperatorship)?;
+    let (config_pda, _bump) = crate::get_config_pda();
+
+    let accounts = vec![
+        AccountMeta::new(*current_operator, true),
+        AccountMeta::new_readonly(*new_operator, false),
+        AccountMeta::new(config_pda, false),
+    ];
+
+    Ok(Instruction {
+        program_id: crate::ID,
         accounts,
         data: ix_data,
     })
@@ -192,9 +216,7 @@ pub fn init_config(
 /// - ix data cannot be serialized
 #[allow(clippy::too_many_arguments)]
 pub fn pay_native_for_contract_call_instruction(
-    program_id: &Pubkey,
     payer: &Pubkey,
-    config_pda: &Pubkey,
     destination_chain: String,
     destination_address: String,
     payload_hash: [u8; 32],
@@ -212,15 +234,16 @@ pub fn pay_native_for_contract_call_instruction(
             gas_fee_amount,
         },
     ))?;
+    let (config_pda, _bump) = crate::get_config_pda();
 
     let accounts = vec![
         AccountMeta::new(*payer, true),
-        AccountMeta::new(*config_pda, false),
+        AccountMeta::new(config_pda, false),
         AccountMeta::new_readonly(system_program::ID, false),
     ];
 
     Ok(Instruction {
-        program_id: *program_id,
+        program_id: crate::ID,
         accounts,
         data: ix_data,
     })
@@ -231,9 +254,7 @@ pub fn pay_native_for_contract_call_instruction(
 /// # Errors
 /// - ix data cannot be serialized
 pub fn add_native_gas_instruction(
-    program_id: &Pubkey,
     sender: &Pubkey,
-    config_pda: &Pubkey,
     tx_hash: [u8; 64],
     log_index: u64,
     gas_fee_amount: u64,
@@ -245,57 +266,55 @@ pub fn add_native_gas_instruction(
         gas_fee_amount,
         refund_address,
     }))?;
+    let (config_pda, _bump) = crate::get_config_pda();
 
     let accounts = vec![
         AccountMeta::new(*sender, true),
-        AccountMeta::new(*config_pda, false),
+        AccountMeta::new(config_pda, false),
         AccountMeta::new_readonly(system_program::ID, false),
     ];
 
     Ok(Instruction {
-        program_id: *program_id,
+        program_id: crate::ID,
         accounts,
         data: ix_data,
     })
 }
 
-/// Builds an instruction for the authority to collect native SOL fees.
+/// Builds an instruction for the operator to collect native SOL fees.
 ///
 /// # Errors
 /// - ix data cannot be serialized
 pub fn collect_native_fees_instruction(
-    program_id: &Pubkey,
-    authority: &Pubkey,
-    config_pda: &Pubkey,
+    operator: &Pubkey,
     receiver: &Pubkey,
     amount: u64,
 ) -> Result<Instruction, ProgramError> {
     let ix_data = borsh::to_vec(&GasServiceInstruction::Native(
         PayWithNativeToken::CollectFees { amount },
     ))?;
+    let (config_pda, _bump) = crate::get_config_pda();
 
     let accounts = vec![
-        AccountMeta::new_readonly(*authority, true),
-        AccountMeta::new(*config_pda, false),
+        AccountMeta::new_readonly(*operator, true),
+        AccountMeta::new(config_pda, false),
         AccountMeta::new(*receiver, false),
     ];
 
     Ok(Instruction {
-        program_id: *program_id,
+        program_id: crate::ID,
         accounts,
         data: ix_data,
     })
 }
 
-/// Builds an instruction for the authority to refund previously collected native SOL fees.
+/// Builds an instruction for the operator to refund previously collected native SOL fees.
 ///
 /// # Errors
 /// - ix data cannot be serialized
 pub fn refund_native_fees_instruction(
-    program_id: &Pubkey,
-    authority: &Pubkey,
+    operator: &Pubkey,
     receiver: &Pubkey,
-    config_pda: &Pubkey,
     tx_hash: [u8; 64],
     log_index: u64,
     fees: u64,
@@ -305,15 +324,16 @@ pub fn refund_native_fees_instruction(
         log_index,
         fees,
     }))?;
+    let (config_pda, _) = crate::get_config_pda();
 
     let accounts = vec![
-        AccountMeta::new_readonly(*authority, true),
+        AccountMeta::new_readonly(*operator, true),
         AccountMeta::new(*receiver, false),
-        AccountMeta::new(*config_pda, false),
+        AccountMeta::new(config_pda, false),
     ];
 
     Ok(Instruction {
-        program_id: *program_id,
+        program_id: crate::ID,
         accounts,
         data: ix_data,
     })
@@ -325,11 +345,8 @@ pub fn refund_native_fees_instruction(
 /// - ix data cannot be serialized
 #[allow(clippy::too_many_arguments)]
 pub fn pay_spl_for_contract_call_instruction(
-    program_id: &Pubkey,
     sender: &Pubkey,
     sender_ata: &Pubkey,
-    config_pda: &Pubkey,
-    config_pda_ata: &Pubkey,
     mint: &Pubkey,
     token_program_id: &Pubkey,
     destination_chain: String,
@@ -352,12 +369,18 @@ pub fn pay_spl_for_contract_call_instruction(
             gas_fee_amount,
         },
     ))?;
+    let (config_pda, _bump) = crate::get_config_pda();
+    let config_pda_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
+        &config_pda,
+        mint,
+        token_program_id,
+    );
 
     let mut accounts = vec![
         AccountMeta::new_readonly(*sender, true),
         AccountMeta::new(*sender_ata, false),
-        AccountMeta::new_readonly(*config_pda, false),
-        AccountMeta::new(*config_pda_ata, false),
+        AccountMeta::new_readonly(config_pda, false),
+        AccountMeta::new(config_pda_ata, false),
         AccountMeta::new_readonly(*mint, false),
         AccountMeta::new_readonly(*token_program_id, false),
     ];
@@ -367,7 +390,7 @@ pub fn pay_spl_for_contract_call_instruction(
     }
 
     Ok(Instruction {
-        program_id: *program_id,
+        program_id: crate::ID,
         accounts,
         data: ix_data,
     })
@@ -379,11 +402,8 @@ pub fn pay_spl_for_contract_call_instruction(
 /// - ix data cannot be serialized
 #[allow(clippy::too_many_arguments)]
 pub fn add_spl_gas_instruction(
-    program_id: &Pubkey,
     sender: &Pubkey,
     sender_ata: &Pubkey,
-    config_pda: &Pubkey,
-    config_pda_ata: &Pubkey,
     mint: &Pubkey,
     token_program_id: &Pubkey,
     signer_pubkeys: &[Pubkey],
@@ -400,12 +420,18 @@ pub fn add_spl_gas_instruction(
         gas_fee_amount,
         refund_address,
     }))?;
+    let (config_pda, _bump) = crate::get_config_pda();
+    let config_pda_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
+        &config_pda,
+        mint,
+        token_program_id,
+    );
 
     let mut accounts = vec![
         AccountMeta::new_readonly(*sender, true),
         AccountMeta::new(*sender_ata, false),
-        AccountMeta::new_readonly(*config_pda, false),
-        AccountMeta::new(*config_pda_ata, false),
+        AccountMeta::new_readonly(config_pda, false),
+        AccountMeta::new(config_pda_ata, false),
         AccountMeta::new_readonly(*mint, false),
         AccountMeta::new_readonly(*token_program_id, false),
     ];
@@ -414,24 +440,21 @@ pub fn add_spl_gas_instruction(
     }
 
     Ok(Instruction {
-        program_id: *program_id,
+        program_id: crate::ID,
         accounts,
         data: ix_data,
     })
 }
 
-/// Builds an instruction for the authority to collect SPL fees.
+/// Builds an instruction for the operator to collect SPL fees.
 ///
 /// # Errors
 /// - ix data cannot be serialized
 #[allow(clippy::too_many_arguments)]
 pub fn collect_spl_fees_instruction(
-    program_id: &Pubkey,
-    authority: &Pubkey,
+    operator: &Pubkey,
     token_program_id: &Pubkey,
     mint: &Pubkey,
-    config_pda: &Pubkey,
-    config_pda_ata: &Pubkey,
     receiver: &Pubkey,
     amount: u64,
     decimals: u8,
@@ -439,35 +462,38 @@ pub fn collect_spl_fees_instruction(
     let ix_data = borsh::to_vec(&GasServiceInstruction::SplToken(
         PayWithSplToken::CollectFees { amount, decimals },
     ))?;
+    let (config_pda, _bump) = crate::get_config_pda();
+    let config_pda_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
+        &config_pda,
+        mint,
+        token_program_id,
+    );
 
     let accounts = vec![
-        AccountMeta::new_readonly(*authority, true),
+        AccountMeta::new_readonly(*operator, true),
         AccountMeta::new(*receiver, false),
-        AccountMeta::new_readonly(*config_pda, false),
-        AccountMeta::new(*config_pda_ata, false),
+        AccountMeta::new_readonly(config_pda, false),
+        AccountMeta::new(config_pda_ata, false),
         AccountMeta::new_readonly(*mint, false),
         AccountMeta::new_readonly(*token_program_id, false),
     ];
 
     Ok(Instruction {
-        program_id: *program_id,
+        program_id: crate::ID,
         accounts,
         data: ix_data,
     })
 }
 
-/// Builds an instruction for the authority to refund previously collected SPL fees.
+/// Builds an instruction for the operator to refund previously collected SPL fees.
 ///
 /// # Errors
 /// - ix data cannot be serialized
 #[allow(clippy::too_many_arguments)]
 pub fn refund_spl_fees_instruction(
-    program_id: &Pubkey,
-    authority: &Pubkey,
+    operator: &Pubkey,
     token_program_id: &Pubkey,
     mint: &Pubkey,
-    config_pda: &Pubkey,
-    config_pda_ata: &Pubkey,
     receiver: &Pubkey,
     tx_hash: [u8; 64],
     log_index: u64,
@@ -480,18 +506,24 @@ pub fn refund_spl_fees_instruction(
         log_index,
         fees,
     }))?;
+    let (config_pda, _bump) = crate::get_config_pda();
+    let config_pda_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
+        &config_pda,
+        mint,
+        token_program_id,
+    );
 
     let accounts = vec![
-        AccountMeta::new_readonly(*authority, true),
+        AccountMeta::new_readonly(*operator, true),
         AccountMeta::new(*receiver, false),
-        AccountMeta::new_readonly(*config_pda, false),
-        AccountMeta::new(*config_pda_ata, false),
+        AccountMeta::new_readonly(config_pda, false),
+        AccountMeta::new(config_pda_ata, false),
         AccountMeta::new_readonly(*mint, false),
         AccountMeta::new_readonly(*token_program_id, false),
     ];
 
     Ok(Instruction {
-        program_id: *program_id,
+        program_id: crate::ID,
         accounts,
         data: ix_data,
     })

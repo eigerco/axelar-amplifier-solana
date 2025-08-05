@@ -25,7 +25,7 @@ use core::mem::size_of;
 use core::ops::Deref;
 
 use solana_program::entrypoint::ProgramResult;
-use solana_program::keccak::{Hash, hashv};
+use solana_program::keccak::{hashv, Hash};
 use solana_program::msg;
 use solana_program::program_error::ProgramError;
 
@@ -253,7 +253,10 @@ mod tests {
             account_data.as_mut_slice().try_into().unwrap();
 
         let expected_hash = Keccak256::digest(&message_payload.raw_payload).to_vec();
-        assert_eq!(expected_hash, message_payload.hash_raw_payload_bytes().to_bytes());
+        assert_eq!(
+            expected_hash,
+            message_payload.hash_raw_payload_bytes().to_bytes()
+        );
         assert_ne!(expected_hash, vec![0_u8; 32]); // confidence check
     }
 }

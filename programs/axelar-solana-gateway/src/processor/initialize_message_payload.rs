@@ -111,9 +111,10 @@ impl Processor {
         let signers_seeds = &[
             crate::seed_prefixes::MESSAGE_PAYLOAD_SEED,
             incoming_message_pda.as_ref(),
+            payer.key.as_ref(),
             &[bump_seed],
         ];
-
+        
         init_pda_raw(
             payer,
             message_payload_account,

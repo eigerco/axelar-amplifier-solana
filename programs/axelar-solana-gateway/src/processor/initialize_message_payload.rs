@@ -114,7 +114,7 @@ impl Processor {
             payer.key.as_ref(),
             &[bump_seed],
         ];
-        
+
         init_pda_raw(
             payer,
             message_payload_account,

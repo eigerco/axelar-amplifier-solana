@@ -72,13 +72,13 @@ async fn test_send_from_evm_to_solana() {
         .unwrap()
         .clone();
 
-    let tx = solana_chain
-        .execute_on_axelar_executable(
-            merkelised_message.leaf.message,
-            &decoded_payload.encode().unwrap(),
-        )
-        .await
-        .unwrap();
+    let tx = crate::execute_on_axelar_executable(
+        &mut solana_chain,
+        merkelised_message.leaf.message,
+        &decoded_payload.encode().unwrap(),
+    )
+    .await
+    .unwrap();
 
     let log_msgs = tx.metadata.unwrap().log_messages;
     assert!(

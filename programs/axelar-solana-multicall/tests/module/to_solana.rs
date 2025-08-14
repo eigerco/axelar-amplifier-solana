@@ -54,13 +54,13 @@ async fn test_multicall_different_encodings() {
             .unwrap()
             .clone();
 
-        let tx = solana_chain
-            .execute_on_axelar_executable(
-                merkelised_message.leaf.message,
-                &payload.encode().unwrap(),
-            )
-            .await
-            .unwrap();
+        let tx = crate::execute_on_axelar_executable(
+            &mut solana_chain,
+            merkelised_message.leaf.message,
+            &payload.encode().unwrap(),
+        )
+        .await
+        .unwrap();
 
         let log_msgs = tx.metadata.unwrap().log_messages;
         assert!(
@@ -109,12 +109,12 @@ async fn test_empty_multicall_should_succeed() {
             .unwrap()
             .clone();
 
-        let _tx = solana_chain
-            .execute_on_axelar_executable(
-                merkelised_message.leaf.message,
-                &payload.encode().unwrap(),
-            )
-            .await
-            .unwrap();
+        let _tx = crate::execute_on_axelar_executable(
+            &mut solana_chain,
+            merkelised_message.leaf.message,
+            &payload.encode().unwrap(),
+        )
+        .await
+        .unwrap();
     }
 }

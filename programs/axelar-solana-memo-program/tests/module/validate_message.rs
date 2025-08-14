@@ -78,13 +78,13 @@ async fn test_successful_validate_message(#[case] encoding_scheme: EncodingSchem
         .find(|x| x.leaf.message.cc_id == message_to_execute.cc_id)
         .unwrap()
         .clone();
-    let tx = solana_chain
-        .execute_on_axelar_executable(
-            merkelised_message.leaf.message.clone(),
-            &message_payload.encode().unwrap(),
-        )
-        .await
-        .unwrap();
+    let tx = crate::execute_on_axelar_executable(
+        &mut solana_chain,
+        merkelised_message.leaf.message.clone(),
+        &message_payload.encode().unwrap(),
+    )
+    .await
+    .unwrap();
 
     // Assert
     // First message should be executed

@@ -48,6 +48,7 @@ solana-program.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+axelar-solana-encoding.workspace = true
 axelar-solana-memo-program = { workspace = true, features = ["no-entrypoint"] }
 axelar-solana-gateway-test-fixtures.workspace = true
 ethers-core.workspace = true

@@ -251,30 +251,30 @@ async fn test_send_from_evm_to_solana_single_case(test_case: MemoTestCase) -> Re
         .next()
         .ok_or(MemoTestError::NoMerkleisedMessage)?;
 
-    let tx = solana_chain
-        .execute_on_axelar_executable(
-            merkelised_message.leaf.message,
-            &decoded_payload
-                .encode()
-                .context(MemoTestError::PayloadEncodingError)?,
-        )
-        .await
-        .or_else(|error| {
-            let Some(tx_error) = error.result.err() else {
-                unreachable!()
-            };
-            if error
-                .metadata
-                .ok_or(MemoTestError::NoTransactionMetadata)?
-                .log_messages
-                .iter()
-                .any(|log| log.contains("memory allocation failed, out of memory"))
-            {
-                Err(MemoTestError::OutOfMemory)
-            } else {
-                Err(MemoTestError::TransactionError(tx_error))
-            }
-        })?;
+    let tx = crate::execute_on_axelar_executable(
+        &mut solana_chain,
+        merkelised_message.leaf.message,
+        &decoded_payload
+            .encode()
+            .context(MemoTestError::PayloadEncodingError)?,
+    )
+    .await
+    .or_else(|error| {
+        let Some(tx_error) = error.result.err() else {
+            unreachable!()
+        };
+        if error
+            .metadata
+            .ok_or(MemoTestError::NoTransactionMetadata)?
+            .log_messages
+            .iter()
+            .any(|log| log.contains("memory allocation failed, out of memory"))
+        {
+            Err(MemoTestError::OutOfMemory)
+        } else {
+            Err(MemoTestError::TransactionError(tx_error))
+        }
+    })?;
 
     // Assert
     let log_msgs = tx

@@ -320,33 +320,6 @@ impl SolanaAxelarIntegrationMetadata {
         self.send_tx(&[rotate_signers_ix]).await
     }
 
-    // TODO That's the only reason this depends on the axelar-executable crate??
-    /// Call `execute` on an axelar-executable program
-    #[cfg(feature = "axelar-executable")]
-    pub async fn execute_on_axelar_executable(
-        &mut self,
-        message: Message,
-        raw_payload: &[u8],
-    ) -> Result<BanksTransactionResultWithMetadata, BanksTransactionResultWithMetadata> {
-        let message_payload_pda = self.upload_message_payload(&message, raw_payload).await?;
-
-        let (incoming_message_pda, _bump) =
-            get_incoming_message_pda(&command_id(&message.cc_id.chain, &message.cc_id.id));
-        let ix = axelar_executable::construct_axelar_executable_ix(
-            &message,
-            raw_payload,
-            incoming_message_pda,
-            message_payload_pda,
-        )
-        .unwrap();
-        let execute_results = self.send_tx(&[ix]).await;
-
-        // Close message payload and reclaim lamports
-        self.close_message_payload(&message).await?;
-
-        execute_results
-    }
-
     /// Get the signature verification session data (deserialised)
     pub async fn signature_verification_session(
         &mut self,
@@ -477,7 +450,8 @@ impl SolanaAxelarIntegrationMetadata {
         Ok(())
     }
 
-    async fn close_message_payload(
+    // TODO Is there another way?
+    pub async fn close_message_payload(
         &mut self,
         message: &Message,
     ) -> Result<(), BanksTransactionResultWithMetadata> {

@@ -834,7 +834,6 @@ dependencies = [
 name = "axelar-solana-gateway-test-fixtures"
 version = "0.1.0"
 dependencies = [
- "axelar-executable",
  "axelar-solana-encoding",
  "axelar-solana-gas-service",
  "axelar-solana-gas-service-events",
@@ -946,6 +945,7 @@ version = "0.1.0"
 dependencies = [
  "alloy-sol-types",
  "axelar-executable",
+ "axelar-solana-encoding",
  "axelar-solana-gateway",
  "axelar-solana-gateway-test-fixtures",
  "axelar-solana-memo-program",

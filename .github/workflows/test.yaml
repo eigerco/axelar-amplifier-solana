@@ -1,6 +1,6 @@
 on:
   push:
-    branches: [main]
+    branches: [main, circular-deps3]
   pull_request:
 
 env:

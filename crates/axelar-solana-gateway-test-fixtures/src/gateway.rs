@@ -320,7 +320,9 @@ impl SolanaAxelarIntegrationMetadata {
         self.send_tx(&[rotate_signers_ix]).await
     }
 
+    // TODO That's the only reason this depends on the axelar-executable crate??
     /// Call `execute` on an axelar-executable program
+    #[cfg(feature = "axelar-executable")]
     pub async fn execute_on_axelar_executable(
         &mut self,
         message: Message,

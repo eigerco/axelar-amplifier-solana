@@ -61,6 +61,6 @@ solana-program-test.workspace = true
 solana-sdk.workspace = true
 rand.workspace = true
 typed-builder.workspace = true
-axelar-solana-gateway-test-fixtures.workspace = true
+axelar-solana-gateway-test-fixtures = { workspace = true, default-features = false, features = ["devnet-amplifier"]}
 rstest.workspace = true
 pretty_assertions.workspace = true

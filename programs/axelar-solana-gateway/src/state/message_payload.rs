@@ -134,7 +134,7 @@ impl<'a> TryFrom<&'a mut [u8]> for MessagePayload<'a, Mut> {
 
         // Unwrap: we just checked that the bump slice is large enough
         let bump = bump_slice.first_mut().unwrap();
-        // In order to parse
+        // In order to parse 
         let committed = committed_slice.first_mut().unwrap();
         // Unwrap: we just checked that the slice bounds fits the expected array size
         let payload_hash = payload_hash_slice.try_into().unwrap();

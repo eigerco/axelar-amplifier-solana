@@ -250,11 +250,12 @@ pub(crate) fn process_outbound_deploy<'a>(
     gas_value: u64,
     signing_pda_bump: u8,
 ) -> ProgramResult {
-    const OUTBOUND_MESSAGE_ACCOUNTS_INDEX: usize = 3;
+    const OUTBOUND_MESSAGE_ACCOUNTS_INDEX: usize = 4;
     let accounts_iter = &mut accounts.iter();
     let payer = next_account_info(accounts_iter)?;
     let mint = next_account_info(accounts_iter)?;
     let metadata = next_account_info(accounts_iter)?;
+    let token_manager_account = next_account_info(accounts_iter)?;
     let token_id = crate::interchain_token_id_internal(&salt);
     let mut outbound_message_accounts_index = OUTBOUND_MESSAGE_ACCOUNTS_INDEX;
 
@@ -267,8 +268,7 @@ pub(crate) fn process_outbound_deploy<'a>(
         let minter = next_account_info(accounts_iter)?;
         let deploy_approval = next_account_info(accounts_iter)?;
         let minter_roles_account = next_account_info(accounts_iter)?;
-        let token_manager_account = next_account_info(accounts_iter)?;
-        outbound_message_accounts_index = outbound_message_accounts_index.saturating_add(4);
+        outbound_message_accounts_index = outbound_message_accounts_index.saturating_add(3);
 
         msg!("Instruction: OutboundDeployMinter");
         ensure_roles(
@@ -288,11 +288,27 @@ pub(crate) fn process_outbound_deploy<'a>(
     let gmp_accounts = GmpAccounts::from_account_info_slice(outbound_message_accounts, &())?;
     msg!("Instruction: OutboundDeploy");
 
+    if *metadata.owner != mpl_token_metadata::ID {
+        msg!("Invalid Metaplex metadata account");
+        return Err(ProgramError::InvalidAccountOwner);
+    }
+
     let token_metadata = Metadata::from_bytes(&metadata.try_borrow_data()?)?;
     let mint_data = Mint::unpack(&mint.try_borrow_data()?)?;
 
     if token_metadata.mint != *mint.key {
         msg!("The metadata and mint accounts passed don't match");
+        return Err(ProgramError::InvalidArgument);
+    }
+    let token_manager = TokenManager::load(token_manager_account)?;
+    assert_valid_token_manager_pda(
+        token_manager_account,
+        gmp_accounts.its_root_account.key,
+        &token_id,
+        token_manager.bump,
+    )?;
+    if token_manager.token_address != *mint.key {
+        msg!("TokenManager doesn't match mint");
         return Err(ProgramError::InvalidArgument);
     }
 

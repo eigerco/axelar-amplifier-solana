@@ -2,7 +2,6 @@
 
 use event_utils::Event as _;
 use interchain_token_transfer_gmp::{GMPPayload, LinkToken, RegisterTokenMetadata};
-use mpl_token_metadata::accounts::Metadata;
 use program_utils::pda::BorshPda;
 use solana_program::account_info::{next_account_info, AccountInfo};
 use solana_program::entrypoint::ProgramResult;
@@ -22,6 +21,7 @@ use crate::{
 };
 
 use super::gmp;
+use super::interchain_token::get_token_metadata;
 use super::token_manager::{DeployTokenManagerAccounts, DeployTokenManagerInternal};
 
 pub(crate) fn process_inbound<'a>(
@@ -252,19 +252,8 @@ fn register_token<'a>(
     let its_config = InterchainTokenService::load(parsed_accounts.its_root_pda)?;
     assert_its_not_paused(&its_config)?;
 
-    match Metadata::from_bytes(&metadata_account.try_borrow_data()?) {
-        Ok(metadata) => {
-            if metadata.mint.ne(parsed_accounts.token_mint.key) {
-                msg!("Metadata and mint mismatch");
-                return Err(ProgramError::InvalidAccountData);
-            }
-        }
-        Err(error) => {
-            msg!("Failed to fetch required Metaplex metadata for the token");
-
-            return Err(error.into());
-        }
-    };
+    // Use the same metadata retrieval logic as outbound deploy
+    let (_name, _symbol) = get_token_metadata(parsed_accounts.token_mint, metadata_account)?;
 
     let (token_manager_type, operator, deploy_salt) = match *registration {
         TokenRegistration::Canonical => (

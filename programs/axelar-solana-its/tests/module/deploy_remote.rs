@@ -489,7 +489,6 @@ async fn test_deploy_remote_interchain_token_with_mismatched_token_manager(
         .expect("Second InterchainToken deployment failed");
 
     // Get the token IDs and mint addresses for both tokens
-    let token_id1 = axelar_solana_its::interchain_token_id(&ctx.solana_wallet, &salt1);
     let token_id2 = axelar_solana_its::interchain_token_id(&ctx.solana_wallet, &salt2);
     let (its_root_pda, _) = axelar_solana_its::find_its_root_pda();
     let (mint2, _) = axelar_solana_its::find_interchain_token_pda(&its_root_pda, &token_id2);

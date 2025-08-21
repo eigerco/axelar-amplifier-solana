@@ -250,7 +250,7 @@ fn register_token<'a>(
 
     let (token_manager_type, operator, deploy_salt) = match *registration {
         TokenRegistration::Canonical => {
-            // Metata is required for canonical tokens
+            // Metadata is required for canonical tokens
             if let Err(_err) = interchain_token::get_token_metadata(
                 parsed_accounts.token_mint,
                 maybe_metadata_account,

@@ -249,8 +249,8 @@ pub(crate) fn process_inbound_deploy<'a>(
 /// 1. First, try to get metadata from Token 2022 extensions
 ///     - If the metadata pointer points to the mint itself, we try to deserialize it using
 ///     `TokenMetadata`
-/// 2. In case no extensions are available, or the `MetadataPointer` does not point to the mint
-///    itself, we try to deserialize the account data as Metaplex `Metadata`.
+/// 2. If we can't retrieve the metadata from embedded TokenMetadata, we try to deserialize the
+///    data from the given metadata account, if any, as Metaplex `Metadata`.
 pub(crate) fn get_token_metadata(
     mint: &AccountInfo,
     maybe_metadata_account: Option<&AccountInfo>,
@@ -263,10 +263,11 @@ pub(crate) fn get_token_metadata(
                 Option::<Pubkey>::from(metadata_pointer.metadata_address)
             {
                 if metadata_address == *mint.key {
-                    let token_metadata_ext =
-                        mint_with_extensions.get_variable_len_extension::<TokenMetadata>()?;
-
-                    return Ok((token_metadata_ext.name, token_metadata_ext.symbol));
+                    if let Ok(token_metadata_ext) =
+                        mint_with_extensions.get_variable_len_extension::<TokenMetadata>()
+                    {
+                        return Ok((token_metadata_ext.name, token_metadata_ext.symbol));
+                    }
                 }
             }
         }

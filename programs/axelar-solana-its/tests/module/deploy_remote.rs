@@ -311,9 +311,10 @@ async fn test_deploy_remote_canonical_token_with_mismatched_metadata(
     // Get the accounts from the instruction
     let mut accounts = deploy_remote_canonical_ix.accounts.clone();
 
-    // Replace the mint account (position 1) with the other mint
-    // but keep the metadata account pointing to the canonical mint's metadata
-    accounts[1].pubkey = other_mint;
+    // Keep the canonical mint but use the other mint's metadata
+    // This way token manager validation passes (it corresponds to canonical_mint)
+    // but metadata validation fails (metadata is for other_mint, mint is canonical_mint)
+    accounts[2].pubkey = other_metadata_pda;
 
     // Create the modified instruction
     let mismatched_canonical_ix = Instruction {

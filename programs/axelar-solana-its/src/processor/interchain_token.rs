@@ -313,22 +313,14 @@ pub(crate) fn process_outbound_deploy<'a>(
         return Err(ProgramError::MissingRequiredSignature);
     }
 
+    // Early validation: Parse GMP accounts to get ITS root PDA for token manager validation
     let destination_minter_data = if let Some(destination_minter) = maybe_destination_minter {
         let minter = next_account_info(accounts_iter)?;
         let deploy_approval = next_account_info(accounts_iter)?;
         let minter_roles_account = next_account_info(accounts_iter)?;
         outbound_message_accounts_index = outbound_message_accounts_index.saturating_add(3);
 
-        msg!("Instruction: OutboundDeployMinter");
-        ensure_roles(
-            &crate::id(),
-            token_manager_account,
-            minter,
-            minter_roles_account,
-            Roles::MINTER,
-        )?;
-
-        Some((Bytes::from(destination_minter), deploy_approval, minter))
+        Some((Bytes::from(destination_minter), deploy_approval, minter, minter_roles_account))
     } else {
         None
     };
@@ -337,12 +329,7 @@ pub(crate) fn process_outbound_deploy<'a>(
     let gmp_accounts = GmpAccounts::from_account_info_slice(outbound_message_accounts, &())?;
     msg!("Instruction: OutboundDeploy");
 
-    // Get metadata with fallback logic (Token 2022 extensions first, then Metaplex)
-    let (name, symbol) = get_token_metadata(mint, Some(metadata))?;
-    let mint_data_ref = mint.try_borrow_data()?;
-    let mint_state = StateWithExtensions::<Mint>::unpack(&mint_data_ref)?;
-    let mint_data = mint_state.base;
-
+    // SECURITY: Validate token manager BEFORE using it for authorization checks
     let token_manager = TokenManager::load(token_manager_account)?;
     assert_valid_token_manager_pda(
         token_manager_account,
@@ -354,6 +341,28 @@ pub(crate) fn process_outbound_deploy<'a>(
         msg!("TokenManager doesn't match mint");
         return Err(ProgramError::InvalidArgument);
     }
+
+    // Now it's safe to use token_manager_account for role validation since we've verified it
+    let destination_minter_data = if let Some((destination_minter, deploy_approval, minter, minter_roles_account)) = destination_minter_data {
+        msg!("Instruction: OutboundDeployMinter");
+        ensure_roles(
+            &crate::id(),
+            token_manager_account,
+            minter,
+            minter_roles_account,
+            Roles::MINTER,
+        )?;
+
+        Some((destination_minter, deploy_approval, minter))
+    } else {
+        None
+    };
+
+    // Get metadata with fallback logic (Token 2022 extensions first, then Metaplex)
+    let (name, symbol) = get_token_metadata(mint, Some(metadata))?;
+    let mint_data_ref = mint.try_borrow_data()?;
+    let mint_state = StateWithExtensions::<Mint>::unpack(&mint_data_ref)?;
+    let mint_data = mint_state.base;
 
     let deployment_started_event = event::InterchainTokenDeploymentStarted {
         token_id,

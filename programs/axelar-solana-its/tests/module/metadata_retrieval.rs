@@ -342,6 +342,7 @@ async fn test_metadata_retrieval_fails_no_metadata(ctx: &mut ItsTestContext) -> 
             .unwrap();
     let mint_rent = ctx.solana_chain.fixture.get_rent(mint_space).await;
 
+    #[allow(clippy::disallowed_methods)]
     let create_mint_account_ix = solana_sdk::system_instruction::create_account(
         &ctx.solana_wallet,
         &mint_pubkey,
@@ -411,6 +412,7 @@ async fn test_metadata_retrieval_fails_wrong_mint_in_metadata(
     let mint_space = spl_token_2022::state::Mint::LEN;
     let mint_rent = ctx.solana_chain.fixture.get_rent(mint_space).await;
 
+    #[allow(clippy::disallowed_methods)]
     let create_mint_account_ix = solana_sdk::system_instruction::create_account(
         &ctx.solana_wallet,
         &mint_pubkey,

@@ -248,38 +248,31 @@ pub(crate) fn process_inbound_deploy<'a>(
 /// Retrieves token metadata with fallback logic:
 /// 1. First, try to get metadata from Token 2022 extensions
 ///     - If the metadata pointer points to the mint itself, we try to deserialize it using
-///     `TokenMetadata`, otherwise we ensure the pointer is pointing to the metadata account given.
-/// 2. In case no extensions are available, or the `MetadataPointer` points to the given account,
-///    we try to deserialize the account data as Metaplex `Metadata`.
+///     `TokenMetadata`
+/// 2. In case no extensions are available, or the `MetadataPointer` does not point to the mint
+///    itself, we try to deserialize the account data as Metaplex `Metadata`.
 pub(crate) fn get_token_metadata(
     mint: &AccountInfo,
-    metadata_account: &AccountInfo,
+    maybe_metadata_account: Option<&AccountInfo>,
 ) -> Result<(String, String), ProgramError> {
     let mint_data = mint.try_borrow_data()?;
 
     if let Ok(mint_with_extensions) = StateWithExtensions::<Mint>::unpack(&mint_data) {
         if let Ok(metadata_pointer) = mint_with_extensions.get_extension::<MetadataPointer>() {
-            match Option::<Pubkey>::from(metadata_pointer.metadata_address) {
-                Some(metadata_address) if metadata_address == *mint.key => {
+            if let Some(metadata_address) =
+                Option::<Pubkey>::from(metadata_pointer.metadata_address)
+            {
+                if metadata_address == *mint.key {
                     let token_metadata_ext =
                         mint_with_extensions.get_variable_len_extension::<TokenMetadata>()?;
 
                     return Ok((token_metadata_ext.name, token_metadata_ext.symbol));
                 }
-                Some(metadata_address) => {
-                    if metadata_address != *metadata_account.key {
-                        msg!("MetadataPointer address doesn't match given metadata account");
-                        return Err(ProgramError::InvalidAccountData);
-                    }
-                }
-                None => {
-                    // MetadataPointer Extension not properly initialized. Fallback to try Metaplex
-                    // metadata passed.
-                }
             }
         }
     }
 
+    let metadata_account = maybe_metadata_account.ok_or(ProgramError::NotEnoughAccountKeys)?;
     if *metadata_account.owner != mpl_token_metadata::ID {
         msg!("Invalid Metaplex metadata account");
         return Err(ProgramError::InvalidAccountOwner);
@@ -344,7 +337,7 @@ pub(crate) fn process_outbound_deploy<'a>(
     msg!("Instruction: OutboundDeploy");
 
     // Get metadata with fallback logic (Token 2022 extensions first, then Metaplex)
-    let (name, symbol) = get_token_metadata(mint, metadata)?;
+    let (name, symbol) = get_token_metadata(mint, Some(metadata))?;
     let mint_data_ref = mint.try_borrow_data()?;
     let mint_state = StateWithExtensions::<Mint>::unpack(&mint_data_ref)?;
     let mint_data = mint_state.base;

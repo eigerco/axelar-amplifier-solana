@@ -187,8 +187,9 @@ async fn test_deploy_remote_interchain_token_with_mismatched_metadata(
     let mut accounts = deploy_remote_ix.accounts.clone();
 
     // Temper with the accounts
-    accounts[1].pubkey = separate_mint;
-    accounts[2].pubkey = interchain_token_metadata_pda;
+    // Keep the interchain token mint but use the separate mint's metadata
+    // This way token manager validation passes but metadata validation fails
+    accounts[2].pubkey = separate_metadata_pda;
 
     // Create the modified instruction
     let mismatched_ix = Instruction {
@@ -417,10 +418,10 @@ async fn test_deploy_remote_without_minter_with_mismatched_metadata(
     // Get the accounts from the instruction
     let mut accounts = deploy_remote_ix.accounts.clone();
 
-    // Replace the mint account with our separate mint
-    accounts[1].pubkey = separate_mint;
+    // Keep the interchain token mint but use separate mint's metadata
+    // This way token manager validation passes but metadata validation fails
     // The metadata account is at position 2
-    accounts[2].pubkey = interchain_token_metadata_pda;
+    accounts[2].pubkey = separate_metadata_pda;
 
     // Create the modified instruction
     let mismatched_ix = Instruction {

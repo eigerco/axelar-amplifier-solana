@@ -29,8 +29,7 @@ use crate::state::flow_limit::{self, FlowDirection, FlowSlot};
 use crate::state::token_manager::{self, TokenManager};
 use crate::{
     assert_valid_flow_slot_pda, assert_valid_interchain_transfer_execute_pda,
-    assert_valid_token_manager_pda, event, seed_prefixes,
-    FromAccountInfoSlice, Validate,
+    assert_valid_token_manager_pda, event, seed_prefixes, FromAccountInfoSlice, Validate,
 };
 
 use super::gmp::{self, GmpAccounts};

@@ -508,11 +508,7 @@ async fn test_custom_token_with_fee_lock_unlock_fee(
     ctx.send_solana_tx(&[metadata_ix]).await.unwrap();
 
     // Then register token metadata
-    let tx = ctx.send_solana_tx(&[register_metadata]).await.unwrap();
-    let call_contract_event = fetch_first_call_contract_event_from_tx(&tx);
-
-    // Relay metadata registration to EVM
-    ctx.relay_to_evm(&call_contract_event.payload).await;
+    ctx.send_solana_tx(&[register_metadata]).await.unwrap();
 
     // Register token metadata on EVM
     ctx.evm_its_contracts
@@ -691,7 +687,7 @@ async fn test_custom_token_with_fee_lock_unlock_fee(
         .interchain_transfer(
             token_id,
             ctx.solana_chain_name.clone(),
-            ctx.solana_wallet.to_bytes().into(),
+            user_ata.to_bytes().into(),
             inbound_transfer_amount.into(),
             vec![].into(),
             0.into(),

@@ -1,15 +1,11 @@
 use axelar_solana_gateway_test_fixtures::base::FindLog;
-use evm_contracts_test_suite::ethers::signers::Signer;
 use mpl_token_metadata::accounts::Metadata;
 use mpl_token_metadata::instructions::CreateV1Builder;
 use mpl_token_metadata::types::TokenStandard;
 use solana_program_test::tokio;
-use solana_sdk::clock::Clock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer as _;
-use spl_associated_token_account::get_associated_token_address_with_program_id;
-use spl_associated_token_account::instruction::create_associated_token_account;
 use test_context::test_context;
 
 use axelar_solana_its::state::token_manager::Type as TokenManagerType;
@@ -22,12 +18,13 @@ use crate::{fetch_first_call_contract_event_from_tx, ItsTestContext};
 /// Helper function to set up a custom token with a specific deployer
 async fn setup_custom_token_with_deployer(
     ctx: &mut ItsTestContext,
-    deployer: Pubkey,
+    deployer_keypair: &Keypair,
     token_manager_type: TokenManagerType,
     token_name: &str,
     token_symbol: &str,
     salt_seed: &[u8],
 ) -> anyhow::Result<([u8; 32], CustomTestToken<ContractMiddleware>, Pubkey)> {
+    let deployer = deployer_keypair.pubkey();
     let salt = solana_sdk::keccak::hash(salt_seed).to_bytes();
     let custom_token = ctx
         .evm_signer
@@ -63,10 +60,17 @@ async fn setup_custom_token_with_deployer(
     )?;
 
     let tx = ctx
-        .send_solana_tx(&[metadata_ix, register_metadata])
-        .await
-        .unwrap();
-    let call_contract_event = fetch_first_call_contract_event_from_tx(&tx);
+        .solana_chain
+        .fixture
+        .send_tx_with_custom_signers(
+            &[metadata_ix, register_metadata],
+            &[
+                deployer_keypair.insecure_clone(),
+                ctx.solana_chain.fixture.payer.insecure_clone(),
+            ],
+        )
+        .await;
+    let call_contract_event = fetch_first_call_contract_event_from_tx(&tx.unwrap());
 
     let GMPPayload::RegisterTokenMetadata(register_message) =
         GMPPayload::decode(&call_contract_event.payload)?
@@ -96,9 +100,16 @@ async fn setup_custom_token_with_deployer(
         None,
     )?;
 
-    ctx.send_solana_tx(&[register_custom_token_ix])
-        .await
-        .unwrap();
+    ctx.solana_chain
+        .fixture
+        .send_tx_with_custom_signers(
+            &[register_custom_token_ix],
+            &[
+                deployer_keypair.insecure_clone(),
+                ctx.solana_chain.fixture.payer.insecure_clone(),
+            ],
+        )
+        .await;
 
     let link_token_ix = axelar_solana_its::instruction::link_token(
         deployer,
@@ -110,8 +121,18 @@ async fn setup_custom_token_with_deployer(
         0,
     )?;
 
-    let tx = ctx.send_solana_tx(&[link_token_ix]).await.unwrap();
-    let call_contract_event = fetch_first_call_contract_event_from_tx(&tx);
+    let tx = ctx
+        .solana_chain
+        .fixture
+        .send_tx_with_custom_signers(
+            &[link_token_ix],
+            &[
+                deployer_keypair.insecure_clone(),
+                ctx.solana_chain.fixture.payer.insecure_clone(),
+            ],
+        )
+        .await;
+    let call_contract_event = fetch_first_call_contract_event_from_tx(&tx.unwrap());
     ctx.relay_to_evm(&call_contract_event.payload).await;
 
     Ok((token_id, custom_token, custom_solana_token))
@@ -131,30 +152,22 @@ async fn test_deployment_approval_bypass_with_fake_token_manager(
         .fund_account(&alice.pubkey(), 10_000_000_000)
         .await;
 
-    // Step 1: Alice creates TokenA and becomes its minter
-    let (token_id_a, _, solana_token_a) = setup_custom_token_with_deployer(
-        ctx,
+    // Step 1: Alice creates TokenA (native interchain token)
+    let salt_a = solana_sdk::keccak::hash(b"token-a-salt").to_bytes();
+    let deploy_token_a_ix = axelar_solana_its::instruction::deploy_interchain_token(
         alice.pubkey(),
-        TokenManagerType::NativeInterchainToken,
-        "Token A",
-        "TA",
-        b"token-a-salt",
-    )
-    .await?;
-
-    // Alice hands over mint authority to ITS for TokenA
-    let authority_transfer_a_ix =
-        axelar_solana_its::instruction::token_manager::handover_mint_authority(
-            alice.pubkey(),
-            token_id_a,
-            solana_token_a,
-            spl_token_2022::id(),
-        )?;
+        salt_a,
+        "Token A".to_owned(),
+        "TA".to_owned(),
+        9,
+        1000,
+        Some(alice.pubkey()),
+    )?;
 
     ctx.solana_chain
         .fixture
         .send_tx_with_custom_signers(
-            &[authority_transfer_a_ix],
+            &[deploy_token_a_ix],
             &[
                 alice.insecure_clone(),
                 ctx.solana_chain.fixture.payer.insecure_clone(),
@@ -162,6 +175,8 @@ async fn test_deployment_approval_bypass_with_fake_token_manager(
         )
         .await;
 
+    let _token_id_a = axelar_solana_its::interchain_token_id(&alice.pubkey(), &salt_a);
+    
     // Step 2: Alice creates a deployment approval for TokenA
     let destination_chain = "polygon".to_string();
     let destination_minter = b"0x1234567890123456789012345678901234567890".to_vec();
@@ -170,7 +185,7 @@ async fn test_deployment_approval_bypass_with_fake_token_manager(
         axelar_solana_its::instruction::approve_deploy_remote_interchain_token(
             alice.pubkey(),
             alice.pubkey(), // Alice is the deployer
-            solana_sdk::keccak::hash(b"token-a-salt").to_bytes(),
+            salt_a,
             destination_chain.clone(),
             destination_minter.clone(),
         )?;
@@ -186,32 +201,22 @@ async fn test_deployment_approval_bypass_with_fake_token_manager(
         )
         .await;
 
-    // Step 3: Alice loses minter privileges for TokenA
-    // (simulated by removing her minter role - in practice this could happen through role management)
-
-    // Step 4: Alice creates TokenB and becomes its minter
-    let (token_id_b, _, solana_token_b) = setup_custom_token_with_deployer(
-        ctx,
+    // Step 3: Alice creates TokenB (native interchain token)  
+    let salt_b = solana_sdk::keccak::hash(b"token-b-salt").to_bytes();
+    let deploy_token_b_ix = axelar_solana_its::instruction::deploy_interchain_token(
         alice.pubkey(),
-        TokenManagerType::NativeInterchainToken,
-        "Token B", 
-        "TB",
-        b"token-b-salt",
-    )
-    .await?;
-
-    let authority_transfer_b_ix =
-        axelar_solana_its::instruction::token_manager::handover_mint_authority(
-            alice.pubkey(),
-            token_id_b,
-            solana_token_b,
-            spl_token_2022::id(),
-        )?;
+        salt_b,
+        "Token B".to_owned(),
+        "TB".to_owned(),
+        9,
+        1000,
+        Some(alice.pubkey()),
+    )?;
 
     ctx.solana_chain
         .fixture
         .send_tx_with_custom_signers(
-            &[authority_transfer_b_ix],
+            &[deploy_token_b_ix],
             &[
                 alice.insecure_clone(),
                 ctx.solana_chain.fixture.payer.insecure_clone(),
@@ -219,13 +224,14 @@ async fn test_deployment_approval_bypass_with_fake_token_manager(
         )
         .await;
 
-    // Step 5: Alice attempts to deploy TokenA remotely using TokenB's token manager for authorization
-    // This should fail after the fix, but currently succeeds
+    let token_id_b = axelar_solana_its::interchain_token_id(&alice.pubkey(), &salt_b);
+
+    // Step 4: Alice attempts to deploy TokenA remotely using TokenB's token manager for authorization
+    // This should fail after the fix
     
-    let clock_sysvar = ctx.solana_chain.get_sysvar::<Clock>().await;
     let mut deploy_remote_ix = axelar_solana_its::instruction::deploy_remote_interchain_token_with_minter(
         alice.pubkey(),
-        solana_sdk::keccak::hash(b"token-a-salt").to_bytes(),
+        salt_a,
         alice.pubkey(), // Alice as the deployer
         destination_chain.clone(),
         destination_minter,
@@ -259,9 +265,8 @@ async fn test_deployment_approval_bypass_with_fake_token_manager(
 
     let error_tx = result.unwrap_err();
     assert!(
-        error_tx.find_log("TokenManager doesn't match mint").is_some() 
-            || error_tx.find_log("Invalid TokenManager account provided").is_some(),
-        "Expected 'TokenManager doesn't match mint' or 'Invalid TokenManager account provided' error message"
+        error_tx.find_log("Provided seeds do not result in a valid address").is_some(),
+        "Expected token manager validation error message"
     );
 
     Ok(())

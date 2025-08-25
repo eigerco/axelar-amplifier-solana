@@ -8,8 +8,8 @@ use solana_program::entrypoint::ProgramResult;
 use solana_program::msg;
 use solana_program::program::set_return_data;
 use solana_program::program_error::ProgramError;
-use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
+use spl_token_2022::extension::StateWithExtensions;
 use spl_token_2022::state::Mint;
 
 use crate::processor::gmp::{self, GmpAccounts};
@@ -172,18 +172,19 @@ pub(crate) fn register_token_metadata<'a>(
         return Err(ProgramError::InvalidAccountData);
     }
 
-    let mint = Mint::unpack(&mint_account.data.borrow())?;
+    let mint_data = mint_account.try_borrow_data()?;
+    let mint = StateWithExtensions::<Mint>::unpack(&mint_data)?;
     let payload = GMPPayload::RegisterTokenMetadata(RegisterTokenMetadata {
         selector: RegisterTokenMetadata::MESSAGE_TYPE_ID
             .try_into()
             .map_err(|_err| ProgramError::ArithmeticOverflow)?,
         token_address: mint_account.key.to_bytes().into(),
-        decimals: mint.decimals,
+        decimals: mint.base.decimals,
     });
 
     event::TokenMetadataRegistered {
         token_address: *mint_account.key,
-        decimals: mint.decimals,
+        decimals: mint.base.decimals,
     }
     .emit();
 

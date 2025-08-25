@@ -262,6 +262,7 @@ pub(crate) fn validate_mint_extensions(
 
     Ok(())
 }
+
 pub(crate) fn validate_token_manager_type(
     ty: token_manager::Type,
     token_mint: &AccountInfo<'_>,

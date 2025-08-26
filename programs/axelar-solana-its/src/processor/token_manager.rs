@@ -484,6 +484,9 @@ pub(crate) fn process_add_flow_limiter<'a>(accounts: &'a [AccountInfo<'a>]) -> P
         return Err(ProgramError::InvalidAccountData);
     }
 
+    // Ensure resource is a `TokenManager`
+    TokenManager::load(resource)?;
+
     let role_management_accounts = RoleAddAccounts {
         system_account,
         payer,
@@ -519,6 +522,9 @@ pub(crate) fn process_remove_flow_limiter<'a>(accounts: &'a [AccountInfo<'a>]) -
         msg!("Resource is not a TokenManager");
         return Err(ProgramError::InvalidAccountData);
     }
+
+    // Ensure resource is a `TokenManager`
+    TokenManager::load(resource)?;
 
     let role_management_accounts = RoleRemoveAccounts {
         system_account,

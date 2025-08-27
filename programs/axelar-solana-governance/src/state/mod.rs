@@ -94,3 +94,17 @@ impl Pack for GovernanceConfig {
         })
     }
 }
+
+
+pub(crate) fn validate_config(config: &GovernanceConfig) -> Result<(), ProgramError> {
+    if !VALID_PROPOSAL_DELAY_RANGE.contains(&config.minimum_proposal_eta_delay) {
+        msg!(
+            "The minimum proposal ETA delay must be among {} and {} seconds",
+            VALID_PROPOSAL_DELAY_RANGE.start(),
+            VALID_PROPOSAL_DELAY_RANGE.end()
+        );
+        return Err(ProgramError::InvalidArgument);
+    }
+
+    Ok(())
+}

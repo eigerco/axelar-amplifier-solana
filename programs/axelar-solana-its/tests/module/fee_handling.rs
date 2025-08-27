@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use axelar_solana_gateway_test_fixtures::assert_msg_present_in_logs;
 use axelar_solana_its::state::token_manager::TokenManager;
 use borsh::BorshDeserialize;
 use event_utils::Event;
@@ -744,6 +745,398 @@ async fn test_custom_token_with_fee_lock_unlock_fee(
         .unwrap();
 
     assert_eq!(received_event.amount, inbound_amount_after_fee);
+
+    Ok(())
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_canonical_token_with_fee_uses_lock_unlock_fee(
+    ctx: &mut ItsTestContext,
+) -> anyhow::Result<()> {
+    // Create a canonical token with fee extension
+    let fee_basis_points = 500_u16; // 5%
+    let maximum_fee = 10000_u64;
+    let canonical_mint = ctx
+        .solana_chain
+        .fixture
+        .init_new_mint_with_fee(
+            &ctx.solana_wallet,
+            &spl_token_2022::id(),
+            fee_basis_points,
+            maximum_fee,
+            9,
+            None,
+            None,
+        )
+        .await;
+
+    // Create Metaplex metadata
+    let (canonical_metadata_pda, _) = Metadata::find_pda(&canonical_mint);
+    let create_metadata_ix = CreateV1Builder::new()
+        .metadata(canonical_metadata_pda)
+        .mint(canonical_mint, false)
+        .authority(ctx.solana_wallet)
+        .payer(ctx.solana_wallet)
+        .update_authority(ctx.solana_wallet, true)
+        .system_program(solana_sdk::system_program::id())
+        .sysvar_instructions(solana_sdk::sysvar::instructions::id())
+        .spl_token_program(Some(spl_token_2022::id()))
+        .name("Fee Token".to_string())
+        .symbol("FT".to_string())
+        .uri(String::new())
+        .seller_fee_basis_points(0)
+        .decimals(9)
+        .token_standard(TokenStandard::Fungible)
+        .is_mutable(false)
+        .instruction();
+
+    ctx.send_solana_tx(&[create_metadata_ix]).await.unwrap();
+
+    // Register canonical token
+    let register_canonical_ix =
+        axelar_solana_its::instruction::register_canonical_interchain_token(
+            ctx.solana_wallet,
+            canonical_mint,
+            spl_token_2022::id(),
+        )?;
+
+    ctx.send_solana_tx(&[register_canonical_ix]).await.unwrap();
+
+    // Check that the token manager uses LockUnlockFee type
+    let canonical_token_id = axelar_solana_its::canonical_interchain_token_id(&canonical_mint);
+    let (its_root_pda, _) = axelar_solana_its::find_its_root_pda();
+    let (token_manager_pda, _) =
+        axelar_solana_its::find_token_manager_pda(&its_root_pda, &canonical_token_id);
+
+    let token_manager_account = ctx
+        .solana_chain
+        .try_get_account_no_checks(&token_manager_pda)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let token_manager = TokenManager::try_from_slice(&token_manager_account.data).unwrap();
+
+    assert_eq!(
+        token_manager.ty,
+        axelar_solana_its::state::token_manager::Type::LockUnlockFee,
+        "Canonical token with fee extension should use LockUnlockFee token manager"
+    );
+
+    Ok(())
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_canonical_token_without_fee_uses_lock_unlock(
+    ctx: &mut ItsTestContext,
+) -> anyhow::Result<()> {
+    // Create a canonical token without fee extension
+    let canonical_mint = ctx
+        .solana_chain
+        .fixture
+        .init_new_mint(ctx.solana_wallet, spl_token_2022::id(), 9)
+        .await;
+
+    // Create Metaplex metadata
+    let (canonical_metadata_pda, _) = Metadata::find_pda(&canonical_mint);
+    let create_metadata_ix = CreateV1Builder::new()
+        .metadata(canonical_metadata_pda)
+        .mint(canonical_mint, false)
+        .authority(ctx.solana_wallet)
+        .payer(ctx.solana_wallet)
+        .update_authority(ctx.solana_wallet, true)
+        .system_program(solana_sdk::system_program::id())
+        .sysvar_instructions(solana_sdk::sysvar::instructions::id())
+        .spl_token_program(Some(spl_token_2022::id()))
+        .name("No Fee Token".to_string())
+        .symbol("NFT".to_string())
+        .uri(String::new())
+        .seller_fee_basis_points(0)
+        .decimals(9)
+        .token_standard(TokenStandard::Fungible)
+        .is_mutable(false)
+        .instruction();
+
+    ctx.send_solana_tx(&[create_metadata_ix]).await.unwrap();
+
+    // Register canonical token
+    let register_canonical_ix =
+        axelar_solana_its::instruction::register_canonical_interchain_token(
+            ctx.solana_wallet,
+            canonical_mint,
+            spl_token_2022::id(),
+        )?;
+
+    ctx.send_solana_tx(&[register_canonical_ix]).await.unwrap();
+
+    // Check that the token manager uses LockUnlock type
+    let canonical_token_id = axelar_solana_its::canonical_interchain_token_id(&canonical_mint);
+    let (its_root_pda, _) = axelar_solana_its::find_its_root_pda();
+    let (token_manager_pda, _) =
+        axelar_solana_its::find_token_manager_pda(&its_root_pda, &canonical_token_id);
+
+    let token_manager_account = ctx
+        .solana_chain
+        .try_get_account_no_checks(&token_manager_pda)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let token_manager = TokenManager::try_from_slice(&token_manager_account.data).unwrap();
+
+    assert_eq!(
+        token_manager.ty,
+        axelar_solana_its::state::token_manager::Type::LockUnlock,
+        "Canonical token without fee extension should use LockUnlock token manager"
+    );
+
+    Ok(())
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_custom_token_registration_rejects_lock_unlock_with_fee(
+    ctx: &mut ItsTestContext,
+) -> anyhow::Result<()> {
+    // Create a custom token with fee extension
+    let fee_basis_points = 300_u16; // 3%
+    let maximum_fee = 5000_u64;
+    let custom_token = ctx
+        .solana_chain
+        .fixture
+        .init_new_mint_with_fee(
+            &ctx.solana_wallet,
+            &spl_token_2022::id(),
+            fee_basis_points,
+            maximum_fee,
+            9,
+            None,
+            None,
+        )
+        .await;
+
+    // Create Metaplex metadata
+    let (metadata_pda, _) = Metadata::find_pda(&custom_token);
+    let metadata_ix = CreateV1Builder::new()
+        .metadata(metadata_pda)
+        .mint(custom_token, false)
+        .authority(ctx.solana_wallet)
+        .payer(ctx.solana_wallet)
+        .update_authority(ctx.solana_wallet, true)
+        .system_program(solana_sdk::system_program::id())
+        .sysvar_instructions(solana_sdk::sysvar::instructions::id())
+        .spl_token_program(Some(spl_token_2022::id()))
+        .name("Custom Fee Token".to_string())
+        .symbol("CFT".to_string())
+        .uri(String::new())
+        .seller_fee_basis_points(0)
+        .decimals(9)
+        .token_standard(TokenStandard::Fungible)
+        .is_mutable(false)
+        .instruction();
+
+    ctx.send_solana_tx(&[metadata_ix]).await.unwrap();
+
+    // Try to register with LockUnlock (should fail)
+    let salt = [1u8; 32];
+    let register_custom_ix = axelar_solana_its::instruction::register_custom_token(
+        ctx.solana_wallet,
+        salt,
+        custom_token,
+        axelar_solana_its::state::token_manager::Type::LockUnlock,
+        spl_token_2022::id(),
+        None,
+    )?;
+
+    let result = ctx.send_solana_tx(&[register_custom_ix]).await;
+
+    assert!(
+        result.is_err(),
+        "Expected registration to fail when using LockUnlock with fee extension"
+    );
+
+    let error_tx = result.unwrap_err();
+    assert_msg_present_in_logs(error_tx, "The mint is not compatible with the type");
+
+    Ok(())
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_custom_token_registration_rejects_lock_unlock_fee_without_fee(
+    ctx: &mut ItsTestContext,
+) -> anyhow::Result<()> {
+    // Create a custom token without fee extension
+    let custom_token = ctx
+        .solana_chain
+        .fixture
+        .init_new_mint(ctx.solana_wallet, spl_token_2022::id(), 9)
+        .await;
+
+    // Create Metaplex metadata
+    let (metadata_pda, _) = Metadata::find_pda(&custom_token);
+    let metadata_ix = CreateV1Builder::new()
+        .metadata(metadata_pda)
+        .mint(custom_token, false)
+        .authority(ctx.solana_wallet)
+        .payer(ctx.solana_wallet)
+        .update_authority(ctx.solana_wallet, true)
+        .system_program(solana_sdk::system_program::id())
+        .sysvar_instructions(solana_sdk::sysvar::instructions::id())
+        .spl_token_program(Some(spl_token_2022::id()))
+        .name("Custom No Fee Token".to_string())
+        .symbol("CNFT".to_string())
+        .uri(String::new())
+        .seller_fee_basis_points(0)
+        .decimals(9)
+        .token_standard(TokenStandard::Fungible)
+        .is_mutable(false)
+        .instruction();
+
+    ctx.send_solana_tx(&[metadata_ix]).await.unwrap();
+
+    // Try to register with LockUnlockFee (should fail)
+    let salt = [2u8; 32];
+    let register_custom_ix = axelar_solana_its::instruction::register_custom_token(
+        ctx.solana_wallet,
+        salt,
+        custom_token,
+        axelar_solana_its::state::token_manager::Type::LockUnlockFee,
+        spl_token_2022::id(),
+        None,
+    )?;
+
+    let result = ctx.send_solana_tx(&[register_custom_ix]).await;
+
+    assert!(
+        result.is_err(),
+        "Expected registration to fail when using LockUnlockFee without fee extension"
+    );
+
+    let error_tx = result.unwrap_err();
+    assert_msg_present_in_logs(error_tx, "The mint is not compatible with the type");
+
+    Ok(())
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_custom_token_registration_accepts_lock_unlock_without_fee(
+    ctx: &mut ItsTestContext,
+) -> anyhow::Result<()> {
+    // Create a custom token without fee extension
+    let custom_token = ctx
+        .solana_chain
+        .fixture
+        .init_new_mint(ctx.solana_wallet, spl_token_2022::id(), 9)
+        .await;
+
+    // Create Metaplex metadata
+    let (metadata_pda, _) = Metadata::find_pda(&custom_token);
+    let metadata_ix = CreateV1Builder::new()
+        .metadata(metadata_pda)
+        .mint(custom_token, false)
+        .authority(ctx.solana_wallet)
+        .payer(ctx.solana_wallet)
+        .update_authority(ctx.solana_wallet, true)
+        .system_program(solana_sdk::system_program::id())
+        .sysvar_instructions(solana_sdk::sysvar::instructions::id())
+        .spl_token_program(Some(spl_token_2022::id()))
+        .name("Valid Custom Token".to_string())
+        .symbol("VCT".to_string())
+        .uri(String::new())
+        .seller_fee_basis_points(0)
+        .decimals(9)
+        .token_standard(TokenStandard::Fungible)
+        .is_mutable(false)
+        .instruction();
+
+    ctx.send_solana_tx(&[metadata_ix]).await.unwrap();
+
+    // Register with LockUnlock (should succeed)
+    let salt = [3u8; 32];
+    let register_custom_ix = axelar_solana_its::instruction::register_custom_token(
+        ctx.solana_wallet,
+        salt,
+        custom_token,
+        axelar_solana_its::state::token_manager::Type::LockUnlock,
+        spl_token_2022::id(),
+        None,
+    )?;
+
+    let result = ctx.send_solana_tx(&[register_custom_ix]).await;
+
+    assert!(
+        result.is_ok(),
+        "Expected registration to succeed when using LockUnlock without fee extension"
+    );
+
+    Ok(())
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_custom_token_registration_accepts_lock_unlock_fee_with_fee(
+    ctx: &mut ItsTestContext,
+) -> anyhow::Result<()> {
+    // Create a custom token with fee extension
+    let fee_basis_points = 250_u16; // 2.5%
+    let maximum_fee = 8000_u64;
+    let custom_token = ctx
+        .solana_chain
+        .fixture
+        .init_new_mint_with_fee(
+            &ctx.solana_wallet,
+            &spl_token_2022::id(),
+            fee_basis_points,
+            maximum_fee,
+            9,
+            None,
+            None,
+        )
+        .await;
+
+    // Create Metaplex metadata
+    let (metadata_pda, _) = Metadata::find_pda(&custom_token);
+    let metadata_ix = CreateV1Builder::new()
+        .metadata(metadata_pda)
+        .mint(custom_token, false)
+        .authority(ctx.solana_wallet)
+        .payer(ctx.solana_wallet)
+        .update_authority(ctx.solana_wallet, true)
+        .system_program(solana_sdk::system_program::id())
+        .sysvar_instructions(solana_sdk::sysvar::instructions::id())
+        .spl_token_program(Some(spl_token_2022::id()))
+        .name("Valid Fee Token".to_string())
+        .symbol("VFT".to_string())
+        .uri(String::new())
+        .seller_fee_basis_points(0)
+        .decimals(9)
+        .token_standard(TokenStandard::Fungible)
+        .is_mutable(false)
+        .instruction();
+
+    ctx.send_solana_tx(&[metadata_ix]).await.unwrap();
+
+    // Register with LockUnlockFee (should succeed)
+    let salt = [4u8; 32];
+    let register_custom_ix = axelar_solana_its::instruction::register_custom_token(
+        ctx.solana_wallet,
+        salt,
+        custom_token,
+        axelar_solana_its::state::token_manager::Type::LockUnlockFee,
+        spl_token_2022::id(),
+        None,
+    )?;
+
+    let result = ctx.send_solana_tx(&[register_custom_ix]).await;
+
+    assert!(
+        result.is_ok(),
+        "Expected registration to succeed when using LockUnlockFee with fee extension"
+    );
 
     Ok(())
 }

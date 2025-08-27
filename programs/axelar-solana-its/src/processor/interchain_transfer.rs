@@ -20,7 +20,7 @@ use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::sysvar::Sysvar;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
-use spl_token_2022::extension::{BaseStateWithExtensions, ExtensionType, StateWithExtensions};
+use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use spl_token_2022::state::Mint;
 
 use crate::executable::{AxelarInterchainTokenExecutablePayload, AXELAR_INTERCHAIN_TOKEN_EXECUTE};
@@ -437,34 +437,27 @@ fn handle_give_token_transfer(
             )?;
             amount
         }
-        LockUnlock | LockUnlockFee => {
-            let mint_data = accounts.token_mint.try_borrow_data()?;
-            let mint = StateWithExtensions::<Mint>::unpack(&mint_data)?;
+        LockUnlock => {
+            let decimals = get_mint_decimals(accounts.token_mint)?;
+            let transfer_info =
+                create_give_token_transfer_info(accounts, amount, decimals, None, signer_seeds);
+            transfer_to(&transfer_info)?;
 
-            if mint
-                .get_extension_types()?
-                .contains(&ExtensionType::TransferFeeConfig)
-            {
-                let (fee, decimals) = get_fee_and_decimals(accounts.token_mint, amount)?;
-                let transfer_info = create_give_token_transfer_info(
-                    accounts,
-                    amount,
-                    decimals,
-                    Some(fee),
-                    signer_seeds,
-                );
-                transfer_with_fee_to(&transfer_info)?;
-                amount
-                    .checked_sub(fee)
-                    .ok_or(ProgramError::ArithmeticOverflow)?
-            } else {
-                let decimals = get_mint_decimals(accounts.token_mint)?;
-                let transfer_info =
-                    create_give_token_transfer_info(accounts, amount, decimals, None, signer_seeds);
-                transfer_to(&transfer_info)?;
-
-                amount
-            }
+            amount
+        }
+        LockUnlockFee => {
+            let (fee, decimals) = get_fee_and_decimals(accounts.token_mint, amount)?;
+            let transfer_info = create_give_token_transfer_info(
+                accounts,
+                amount,
+                decimals,
+                Some(fee),
+                signer_seeds,
+            );
+            transfer_with_fee_to(&transfer_info)?;
+            amount
+                .checked_sub(fee)
+                .ok_or(ProgramError::ArithmeticOverflow)?
         }
     };
 
@@ -499,28 +492,21 @@ fn handle_take_token_transfer(
             )?;
             amount
         }
-        LockUnlock | LockUnlockFee => {
-            let mint_data = accounts.token_mint.try_borrow_data()?;
-            let mint = StateWithExtensions::<Mint>::unpack(&mint_data)?;
-
-            if mint
-                .get_extension_types()?
-                .contains(&ExtensionType::TransferFeeConfig)
-            {
-                let (fee, decimals) = get_fee_and_decimals(accounts.token_mint, amount)?;
-                let transfer_info =
-                    create_take_token_transfer_info(accounts, amount, decimals, Some(fee), &[]);
-                transfer_with_fee_to(&transfer_info)?;
-                amount
-                    .checked_sub(fee)
-                    .ok_or(ProgramError::ArithmeticOverflow)?
-            } else {
-                let decimals = get_mint_decimals(accounts.token_mint)?;
-                let transfer_info =
-                    create_take_token_transfer_info(accounts, amount, decimals, None, &[]);
-                transfer_to(&transfer_info)?;
-                amount
-            }
+        LockUnlock => {
+            let decimals = get_mint_decimals(accounts.token_mint)?;
+            let transfer_info =
+                create_take_token_transfer_info(accounts, amount, decimals, None, &[]);
+            transfer_to(&transfer_info)?;
+            amount
+        }
+        LockUnlockFee => {
+            let (fee, decimals) = get_fee_and_decimals(accounts.token_mint, amount)?;
+            let transfer_info =
+                create_take_token_transfer_info(accounts, amount, decimals, Some(fee), &[]);
+            transfer_with_fee_to(&transfer_info)?;
+            amount
+                .checked_sub(fee)
+                .ok_or(ProgramError::ArithmeticOverflow)?
         }
     };
 

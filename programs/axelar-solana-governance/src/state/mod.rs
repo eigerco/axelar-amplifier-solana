@@ -61,6 +61,23 @@ impl GovernanceConfig {
             operator,
         }
     }
+
+    /// Creates a new governance config only for updates with the allowed
+    /// updatable fields.
+    #[must_use]
+    pub const fn new_for_update(
+        chain_hash: Hash,
+        address_hash: Hash,
+        minimum_proposal_eta_delay: u32,
+    ) -> Self {
+        Self {
+            bump: 0, // This field will be ignored on updates
+            chain_hash,
+            address_hash,
+            minimum_proposal_eta_delay,
+            operator: [0; 32], // This field will be ignored on updates
+        }
+    }
     /// Calculate governance config PDA
     #[must_use]
     pub fn pda() -> (Pubkey, u8) {
@@ -94,7 +111,6 @@ impl Pack for GovernanceConfig {
         })
     }
 }
-
 
 pub(crate) fn validate_config(config: &GovernanceConfig) -> Result<(), ProgramError> {
     if !VALID_PROPOSAL_DELAY_RANGE.contains(&config.minimum_proposal_eta_delay) {

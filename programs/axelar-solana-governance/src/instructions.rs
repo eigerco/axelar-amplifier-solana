@@ -16,6 +16,16 @@ pub enum GovernanceInstruction {
     /// 2. [] System program account
     InitializeConfig(GovernanceConfig),
 
+    /// Updates the governance configuration PDA account with the
+    /// new params provided. Note: Not all the params can be updated,
+    /// the processor will enforce which params can be updated.
+    ///
+    /// Only the operator can update the config.
+    ///
+    /// 0. [WRITE, SIGNER] Payer/operator account
+    /// 1. [WRITE] Config PDA account
+    UpdateConfig(GovernanceConfig),
+
     /// A GMP instruction coming from the axelar network.
     /// The very first accounts are the gateways accounts:  
     ///
@@ -151,12 +161,12 @@ pub mod builder {
     use solana_program::{bpf_loader_upgradeable, msg, system_program};
 
     use super::GovernanceInstruction;
-    use crate::processor::GovernanceConfigMeta;
     use crate::processor::{
         gmp, ApproveOperatorProposalMeta, CancelOperatorApprovalMeta, CancelTimeLockProposalMeta,
         ExecuteOperatorProposalMeta, ExecuteProposalMeta, ScheduleTimeLockProposalMeta,
         TransferOperatorshipMeta, WithdrawTokensMeta,
     };
+    use crate::processor::{GovernanceConfigMeta, GovernanceConfigUpdateMeta};
     use crate::state::operator::derive_managed_proposal_pda;
     use crate::state::proposal::{
         ExecutableProposal, ExecuteProposalCallData, ExecuteProposalData,
@@ -202,6 +212,11 @@ pub mod builder {
     /// governance config its built.
     #[derive(Clone, Debug)]
     pub struct ConfigBuild;
+
+    /// Stage of the builder where the instruction for updating the
+    /// governance config its built.
+    #[derive(Clone, Debug)]
+    pub struct ConfigUpdateBuild;
 
     /// Stage of the builder where the instruction for a GMP command is built.
     #[derive(Clone, Debug)]
@@ -349,6 +364,36 @@ pub mod builder {
                 config: Some(config),
                 new_operator: self.new_operator,
                 stage: PhantomData::<ConfigBuild>,
+                gmp_command: None,
+                gmp_msg_meta: self.gmp_msg_meta,
+                prop_target: self.prop_target,
+                prop_native_value: self.prop_native_value,
+                prop_eta: self.prop_eta,
+                prop_pda: self.prop_pda,
+                prop_hash: self.prop_hash,
+                prop_operator_pda: self.prop_operator_pda,
+                prop_call_data: self.prop_call_data,
+            }
+        }
+        /// Creates a new instruction for the governance config initialization.
+        /// It provides access to next stage [`ConfigBuild`].
+        pub fn update_config(
+            self,
+            payer: &Pubkey,
+            config_pda: &Pubkey,
+            config: GovernanceConfig,
+        ) -> IxBuilder<ConfigUpdateBuild> {
+            let accounts = GovernanceConfigUpdateMeta {
+                payer: AccountMeta::new(*payer, true),
+                root_pda: AccountMeta::new(*config_pda, false),
+            }
+            .to_account_vec();
+
+            IxBuilder {
+                accounts: Some(accounts),
+                config: Some(config),
+                new_operator: self.new_operator,
+                stage: PhantomData::<ConfigUpdateBuild>,
                 gmp_command: None,
                 gmp_msg_meta: self.gmp_msg_meta,
                 prop_target: self.prop_target,
@@ -865,6 +910,24 @@ pub mod builder {
             let config = self.config.unwrap();
 
             let data = to_vec(&GovernanceInstruction::InitializeConfig(config))
+                .expect("Unable to encode GovernanceInstruction");
+
+            Instruction {
+                program_id: crate::id(),
+                accounts,
+                data,
+            }
+        }
+    }
+
+    impl IxBuilder<ConfigUpdateBuild> {
+        /// Builds the instruction for initializing the governance config. This
+        /// is a final builder stage.
+        pub fn build(self) -> Instruction {
+            let accounts = self.accounts.unwrap();
+            let config = self.config.unwrap();
+
+            let data = to_vec(&GovernanceInstruction::UpdateConfig(config))
                 .expect("Unable to encode GovernanceInstruction");
 
             Instruction {

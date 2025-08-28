@@ -9,7 +9,6 @@ use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 
-use crate::processor::validate_config;
 use crate::seed_prefixes;
 use crate::state::{validate_config, GovernanceConfig};
 

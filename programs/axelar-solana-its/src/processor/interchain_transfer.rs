@@ -227,7 +227,6 @@ pub(crate) fn process_outbound_transfer<'a>(
     gas_value: u64,
     signing_pda_bump: u8,
     data: Option<Vec<u8>>,
-    payload_hash: Option<[u8; 32]>,
 ) -> ProgramResult {
     const GMP_ACCOUNTS_IDX: usize = 7;
     let take_token_accounts = TakeTokenAccounts::from_account_info_slice(accounts, &())?;
@@ -299,7 +298,6 @@ pub(crate) fn process_outbound_transfer<'a>(
         transfer_event.destination_chain,
         gas_value,
         signing_pda_bump,
-        payload_hash,
         true,
     )
 }

@@ -1067,7 +1067,7 @@ async fn test_remove_trusted_chain_failure_without_authority(ctx: &mut ItsTestCo
 
 #[test_context(ItsTestContext)]
 #[tokio::test]
-async fn test_prcharlient_privilege_escalation_through_different_token(ctx: &mut ItsTestContext) {
+async fn test_prevent_privilege_escalation_through_different_token(ctx: &mut ItsTestContext) {
     // Alice is our ctx.solana_chain.fixture.payer
     // Create Bob who will be the Flow Limiter
     let bob = Keypair::new();

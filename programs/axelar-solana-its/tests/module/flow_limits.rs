@@ -1,5 +1,6 @@
 use alloy_primitives::Bytes;
 use anyhow::anyhow;
+use axelar_solana_gateway_test_fixtures::assert_msg_present_in_logs;
 use borsh::BorshDeserialize;
 use interchain_token_transfer_gmp::SendToHub;
 use solana_program_test::tokio;
@@ -101,7 +102,6 @@ async fn test_incoming_interchain_transfer_within_limit(
 }
 
 #[test_context(ItsTestContext)]
-#[should_panic]
 #[tokio::test]
 async fn test_incoming_interchain_transfer_beyond_limit(ctx: &mut ItsTestContext) {
     let (its_root_pda, _) = axelar_solana_its::find_its_root_pda();
@@ -149,33 +149,15 @@ async fn test_incoming_interchain_transfer_beyond_limit(ctx: &mut ItsTestContext
     })
     .encode();
 
-    ctx.relay_to_solana(
-        &inner_transfer_payload,
-        Some(interchain_token_pda),
-        token_program_id,
-    )
-    .await;
+    let tx = ctx
+        .relay_to_solana(
+            &inner_transfer_payload,
+            Some(interchain_token_pda),
+            token_program_id,
+        )
+        .await;
 
-    let destination_ata =
-        spl_associated_token_account::get_associated_token_address_with_program_id(
-            &ctx.solana_wallet,
-            &interchain_token_pda,
-            &token_program_id,
-        );
-
-    let destination_raw_account = ctx
-        .solana_chain
-        .try_get_account_no_checks(&destination_ata)
-        .await
-        .unwrap()
-        .unwrap();
-    let destination_ata_account =
-        spl_token_2022::state::Account::unpack_from_slice(&destination_raw_account.data).unwrap();
-
-    assert_eq!(
-        destination_ata_account.amount, flow_limit,
-        "New balance doesn't match expected balance"
-    );
+    assert_msg_present_in_logs(tx, "Flow limit exceeded");
 }
 
 #[test_context(ItsTestContext)]
@@ -264,7 +246,6 @@ async fn test_outgoing_interchain_transfer_within_limit(
 }
 
 #[test_context(ItsTestContext)]
-#[should_panic]
 #[tokio::test]
 async fn test_outgoing_interchain_transfer_outside_limit(ctx: &mut ItsTestContext) {
     let token_id = ctx.deployed_interchain_token;
@@ -322,7 +303,8 @@ async fn test_outgoing_interchain_transfer_outside_limit(ctx: &mut ItsTestContex
     )
     .unwrap();
 
-    ctx.send_solana_tx(&[transfer_ix]).await.unwrap();
+    let tx = ctx.send_solana_tx(&[transfer_ix]).await.unwrap_err();
+    assert_msg_present_in_logs(tx, "Flow limit exceeded");
 }
 
 #[test_context(ItsTestContext)]

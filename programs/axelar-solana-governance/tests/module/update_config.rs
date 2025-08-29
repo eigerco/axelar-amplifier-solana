@@ -1,7 +1,9 @@
 use axelar_solana_gateway_test_fixtures::assert_msg_present_in_logs;
 use axelar_solana_gateway_test_fixtures::base::TestFixture;
 use axelar_solana_governance::instructions::builder::IxBuilder;
-use axelar_solana_governance::state::{GovernanceConfig, VALID_PROPOSAL_DELAY_RANGE};
+use axelar_solana_governance::state::{
+    GovernanceConfig, GovernanceConfigUpdate, VALID_PROPOSAL_DELAY_RANGE,
+};
 use borsh::BorshSerialize;
 use solana_program_test::{tokio, ProgramTest};
 use solana_sdk::account::Account;
@@ -19,16 +21,14 @@ async fn test_successfully_update_config() {
 
     init_gov_config(&mut fixture, &config_pda).await;
 
-    let new_config = GovernanceConfig {
-        bump: 40, // This will be preserved from the initial config.
-        chain_hash: [1_u8; 32],
-        address_hash: [2_u8; 32],
-        minimum_proposal_eta_delay: MINIMUM_PROPOSAL_DELAY + 1,
-        operator: Pubkey::new_unique().to_bytes(), // Trying to change the operator should have no effect
+    let config_update = GovernanceConfigUpdate {
+        chain_hash: Some([1_u8; 32]),
+        address_hash: Some([2_u8; 32]),
+        minimum_proposal_eta_delay: Some(MINIMUM_PROPOSAL_DELAY + 1),
     };
 
     let ix = IxBuilder::new()
-        .update_config(&fixture.payer.pubkey(), &config_pda, new_config.clone())
+        .update_config(&fixture.payer.pubkey(), &config_pda, config_update.clone())
         .build();
     let res = fixture.send_tx(&[ix]).await;
     assert!(res.is_ok());
@@ -38,11 +38,17 @@ async fn test_successfully_update_config() {
         .unwrap();
 
     // We assert all allowed fields are updated.
-    assert_eq!(&new_config.address_hash, &updated_config.address_hash);
-    assert_eq!(&new_config.chain_hash, &updated_config.chain_hash);
     assert_eq!(
-        &new_config.minimum_proposal_eta_delay,
-        &updated_config.minimum_proposal_eta_delay
+        config_update.address_hash.as_ref(),
+        Some(&updated_config.address_hash)
+    );
+    assert_eq!(
+        config_update.chain_hash.as_ref(),
+        Some(&updated_config.chain_hash)
+    );
+    assert_eq!(
+        config_update.minimum_proposal_eta_delay.as_ref(),
+        Some(&updated_config.minimum_proposal_eta_delay)
     );
 
     // We are sure the operator field and bump are not changed.
@@ -59,19 +65,20 @@ async fn test_program_checks_config_pda_successfully_derived() {
     let (config_pda, _) = GovernanceConfig::pda();
     init_gov_config(&mut fixture, &config_pda).await;
 
-    let config = GovernanceConfig::new(
-        [1_u8; 32],
-        [2_u8; 32],
-        MINIMUM_PROPOSAL_DELAY,
-        Pubkey::new_unique().to_bytes(),
-    );
+    let config_update = GovernanceConfigUpdate {
+        chain_hash: Some([1_u8; 32]),
+        address_hash: Some([2_u8; 32]),
+        minimum_proposal_eta_delay: Some(MINIMUM_PROPOSAL_DELAY),
+    };
 
     let wrong_config_pda = Keypair::new();
 
     // Store the the config in the wrong pda
     let mut fake_config_account =
         Account::new(1_000_000_000, 10000, &axelar_solana_governance::id());
-    config.serialize(&mut fake_config_account.data).unwrap();
+    config_update
+        .serialize(&mut fake_config_account.data)
+        .unwrap();
     fixture.set_account_state(&wrong_config_pda.pubkey(), fake_config_account);
 
     // fund the wrong config pda so the transaction does not fail because of insufficient funds
@@ -101,7 +108,7 @@ async fn test_program_checks_config_pda_successfully_derived() {
         .update_config(
             &fixture.payer.pubkey(),
             &wrong_config_pda.pubkey(), // Wrong config PDA
-            config.clone(),
+            config_update,
         )
         .build();
     let res = fixture.send_tx(&[ix]).await;
@@ -116,12 +123,11 @@ async fn test_only_operator_can_update_config() {
     let (config_pda, _) = GovernanceConfig::pda();
     init_gov_config(&mut fixture, &config_pda).await;
 
-    let config = GovernanceConfig::new(
-        [1_u8; 32],
-        [2_u8; 32],
-        MINIMUM_PROPOSAL_DELAY,
-        Pubkey::new_unique().to_bytes(),
-    );
+    let config_update = GovernanceConfigUpdate {
+        chain_hash: Some([1_u8; 32]),
+        address_hash: Some([2_u8; 32]),
+        minimum_proposal_eta_delay: Some(MINIMUM_PROPOSAL_DELAY),
+    };
 
     // Transfer lamports to a new payer that is not the current operator
     let new_payer = solana_sdk::signature::Keypair::new();
@@ -133,7 +139,7 @@ async fn test_only_operator_can_update_config() {
     fixture.send_tx(&[ix]).await.unwrap();
     // try to update the config with the new payer that is not the current operator
     let ix = IxBuilder::new()
-        .update_config(&new_payer.pubkey(), &config_pda, config.clone())
+        .update_config(&new_payer.pubkey(), &config_pda, config_update.clone())
         .build();
     let res = fixture
         .send_tx_with_custom_signers(
@@ -155,18 +161,17 @@ async fn test_operator_must_sign_tx() {
     let (config_pda, _) = GovernanceConfig::pda();
     init_gov_config(&mut fixture, &config_pda).await;
 
-    let config = GovernanceConfig::new(
-        [1_u8; 32],
-        [2_u8; 32],
-        MINIMUM_PROPOSAL_DELAY,
-        Pubkey::new_unique().to_bytes(),
-    );
+    let config = GovernanceConfigUpdate {
+        chain_hash: Some([1_u8; 32]),
+        address_hash: Some([2_u8; 32]),
+        minimum_proposal_eta_delay: Some(MINIMUM_PROPOSAL_DELAY),
+    };
 
     let non_signer_operator = Keypair::new();
 
     // try to update the config with the new payer that is not the current operator
     let mut ix = IxBuilder::new()
-        .update_config(&non_signer_operator.pubkey(), &config_pda, config.clone())
+        .update_config(&non_signer_operator.pubkey(), &config_pda, config)
         .build();
 
     ix.accounts[0].is_signer = false; // The operator is not a signer
@@ -185,12 +190,12 @@ async fn test_upper_bound_for_proposal_delay() {
     let (config_pda, _) = GovernanceConfig::pda();
     init_gov_config(&mut fixture, &config_pda).await;
 
-    let config = GovernanceConfig::new(
-        [1_u8; 32],
-        [2_u8; 32],
-        VALID_PROPOSAL_DELAY_RANGE.end() + 1, // Go up the upper limit, this should fail
-        Pubkey::new_unique().to_bytes(),
-    );
+    let config = GovernanceConfigUpdate {
+        chain_hash: Some([1_u8; 32]),
+        address_hash: Some([2_u8; 32]),
+        minimum_proposal_eta_delay: Some(VALID_PROPOSAL_DELAY_RANGE.end() + 1), // Go up the upper limit, this should fail
+    };
+
     let ix = IxBuilder::new()
         .update_config(&fixture.payer.pubkey(), &config_pda, config.clone())
         .build();
@@ -213,14 +218,14 @@ async fn test_lower_bound_for_proposal_delay() {
     let (config_pda, _) = GovernanceConfig::pda();
     init_gov_config(&mut fixture, &config_pda).await;
 
-    let config = GovernanceConfig::new(
-        [1_u8; 32],
-        [2_u8; 32],
-        VALID_PROPOSAL_DELAY_RANGE.start() - 1, // Go down the lower limit, this should fail
-        Pubkey::new_unique().to_bytes(),
-    );
+    let config_update = GovernanceConfigUpdate {
+        chain_hash: Some([1_u8; 32]),
+        address_hash: Some([2_u8; 32]),
+        minimum_proposal_eta_delay: Some(VALID_PROPOSAL_DELAY_RANGE.end() + 1), // Go up the upper limit, this should fail
+    };
+
     let ix = IxBuilder::new()
-        .update_config(&fixture.payer.pubkey(), &config_pda, config.clone())
+        .update_config(&fixture.payer.pubkey(), &config_pda, config_update.clone())
         .build();
     let res = fixture.send_tx(&[ix]).await;
     assert!(res.is_err());

@@ -4,7 +4,7 @@ use axelar_solana_encoding::types::messages::Message;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::state::proposal::ExecuteProposalData;
-use crate::state::GovernanceConfig;
+use crate::state::{GovernanceConfig, GovernanceConfigUpdate};
 
 /// Instructions supported by the governance program.
 #[derive(Debug, Eq, PartialEq, Clone, BorshSerialize, BorshDeserialize)]
@@ -17,14 +17,13 @@ pub enum GovernanceInstruction {
     InitializeConfig(GovernanceConfig),
 
     /// Updates the governance configuration PDA account with the
-    /// new params provided. Note: Not all the params can be updated,
-    /// the processor will enforce which params can be updated.
+    /// new params provided.
     ///
     /// Only the operator can update the config.
     ///
     /// 0. [WRITE, SIGNER] Payer/operator account
     /// 1. [WRITE] Config PDA account
-    UpdateConfig(GovernanceConfig),
+    UpdateConfig(GovernanceConfigUpdate),
 
     /// A GMP instruction coming from the axelar network.
     /// The very first accounts are the gateways accounts:  
@@ -171,7 +170,7 @@ pub mod builder {
     use crate::state::proposal::{
         ExecutableProposal, ExecuteProposalCallData, ExecuteProposalData,
     };
-    use crate::state::GovernanceConfig;
+    use crate::state::{GovernanceConfig, GovernanceConfigUpdate};
 
     /// The initial stage of the builder. This instantiates the builder itself
     /// with all it's data set to None, which goes in cascade and its updated on
@@ -245,6 +244,8 @@ pub mod builder {
         pub accounts: Option<Vec<AccountMeta>>,
         /// The governance config. Only used in the [`ConfigBuild`] stage.
         pub config: Option<GovernanceConfig>,
+        /// The governance config. Only used in the [`ConfigUpdateBuild`] stage.
+        pub config_update: Option<GovernanceConfigUpdate>,
         /// The new operator pubkey. Only used in the
         /// [`TransferOperatorshipBuild`] stage.
         pub new_operator: Option<Pubkey>,
@@ -279,6 +280,7 @@ pub mod builder {
             Self {
                 accounts: None,
                 config: None,
+                config_update: None,
                 new_operator: None,
                 stage: PhantomData::<Init>,
                 gmp_command: None,
@@ -329,6 +331,7 @@ pub mod builder {
             IxBuilder {
                 accounts: self.accounts,
                 config: self.config,
+                config_update: self.config_update,
                 new_operator: self.new_operator,
                 stage: PhantomData::<ProposalRelated>,
                 gmp_command: None,
@@ -362,6 +365,7 @@ pub mod builder {
             IxBuilder {
                 accounts: Some(accounts),
                 config: Some(config),
+                config_update: self.config_update,
                 new_operator: self.new_operator,
                 stage: PhantomData::<ConfigBuild>,
                 gmp_command: None,
@@ -381,7 +385,7 @@ pub mod builder {
             self,
             payer: &Pubkey,
             config_pda: &Pubkey,
-            config: GovernanceConfig,
+            config_update: GovernanceConfigUpdate,
         ) -> IxBuilder<ConfigUpdateBuild> {
             let accounts = GovernanceConfigUpdateMeta {
                 payer: AccountMeta::new(*payer, true),
@@ -391,7 +395,8 @@ pub mod builder {
 
             IxBuilder {
                 accounts: Some(accounts),
-                config: Some(config),
+                config: None,
+                config_update: Some(config_update),
                 new_operator: self.new_operator,
                 stage: PhantomData::<ConfigUpdateBuild>,
                 gmp_command: None,
@@ -424,6 +429,7 @@ pub mod builder {
             IxBuilder {
                 accounts: Some(accounts),
                 config: self.config,
+                config_update: self.config_update,
                 new_operator: Some(*new_operator),
                 stage: PhantomData::<TransferOperatorshipBuild>,
                 gmp_command: self.gmp_command,
@@ -540,6 +546,7 @@ pub mod builder {
             IxBuilder {
                 accounts: self.accounts,
                 config: self.config,
+                config_update: self.config_update,
                 new_operator: self.new_operator,
                 stage: PhantomData::<GmpMeta>,
                 gmp_command: None,
@@ -590,6 +597,7 @@ pub mod builder {
             IxBuilder {
                 accounts: Some(accounts),
                 config: self.config,
+                config_update: self.config_update,
                 new_operator: self.new_operator,
                 stage: PhantomData::<ExecuteProposalBuild>,
                 gmp_command: None,
@@ -653,6 +661,7 @@ pub mod builder {
             IxBuilder {
                 accounts: Some(accounts),
                 config: self.config,
+                config_update: self.config_update,
                 new_operator: self.new_operator,
                 stage: PhantomData::<ExecuteOperatorProposalBuild>,
                 gmp_command: None,
@@ -705,6 +714,7 @@ pub mod builder {
             IxBuilder {
                 accounts: self.accounts,
                 config: self.config,
+                config_update: self.config_update,
                 new_operator: self.new_operator,
                 stage: PhantomData::<GmpIx>,
                 gmp_command: self.gmp_command,
@@ -741,6 +751,7 @@ pub mod builder {
             IxBuilder {
                 accounts: Some(accounts),
                 config: self.config,
+                config_update: self.config_update,
                 new_operator: self.new_operator,
                 stage: PhantomData::<GmpBuild>,
                 gmp_command: Some(GovernanceCommand::ScheduleTimeLockProposal),
@@ -774,6 +785,7 @@ pub mod builder {
             IxBuilder {
                 accounts: Some(accounts),
                 config: self.config,
+                config_update: self.config_update,
                 new_operator: self.new_operator,
                 stage: PhantomData::<GmpBuild>,
                 gmp_command: Some(GovernanceCommand::CancelTimeLockProposal),
@@ -809,6 +821,7 @@ pub mod builder {
             IxBuilder {
                 accounts: Some(accounts),
                 config: self.config,
+                config_update: self.config_update,
                 new_operator: self.new_operator,
                 stage: PhantomData::<GmpBuild>,
                 gmp_command: Some(GovernanceCommand::ApproveOperatorProposal),
@@ -839,6 +852,7 @@ pub mod builder {
             IxBuilder {
                 accounts: Some(accounts),
                 config: self.config,
+                config_update: self.config_update,
                 new_operator: self.new_operator,
                 stage: PhantomData::<GmpBuild>,
                 gmp_command: Some(GovernanceCommand::CancelOperatorApproval),
@@ -925,9 +939,9 @@ pub mod builder {
         /// is a final builder stage.
         pub fn build(self) -> Instruction {
             let accounts = self.accounts.unwrap();
-            let config = self.config.unwrap();
+            let config_update = self.config_update.unwrap();
 
-            let data = to_vec(&GovernanceInstruction::UpdateConfig(config))
+            let data = to_vec(&GovernanceInstruction::UpdateConfig(config_update))
                 .expect("Unable to encode GovernanceInstruction");
 
             Instruction {

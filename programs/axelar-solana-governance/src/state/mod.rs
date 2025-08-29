@@ -5,6 +5,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use core::any::type_name;
 use core::mem::size_of;
 use core::ops::RangeInclusive;
+use solana_program::entrypoint::ProgramResult;
 use solana_program::pubkey::Pubkey;
 use solana_program::{
     msg,
@@ -62,27 +63,34 @@ impl GovernanceConfig {
         }
     }
 
-    /// Creates a new governance config only for updates with the allowed
-    /// updatable fields.
-    #[must_use]
-    pub const fn new_for_update(
-        chain_hash: Hash,
-        address_hash: Hash,
-        minimum_proposal_eta_delay: u32,
-    ) -> Self {
-        Self {
-            bump: 0, // This field will be ignored on updates
-            chain_hash,
-            address_hash,
-            minimum_proposal_eta_delay,
-            operator: [0; 32], // This field will be ignored on updates
+    pub fn update(&mut self, mut update: GovernanceConfigUpdate) -> ProgramResult {
+        if let Some(new_chain_hash) = update.chain_hash.take() {
+            self.chain_hash = new_chain_hash;
         }
+
+        if let Some(new_address_hash) = update.address_hash.take() {
+            self.address_hash = new_address_hash;
+        }
+
+        if let Some(new_minimum_proposal_eta_delay) = update.minimum_proposal_eta_delay.take() {
+            self.minimum_proposal_eta_delay = new_minimum_proposal_eta_delay;
+        }
+        validate_config(self)
     }
+
     /// Calculate governance config PDA
     #[must_use]
     pub fn pda() -> (Pubkey, u8) {
         Pubkey::find_program_address(&[seed_prefixes::GOVERNANCE_CONFIG], &crate::ID)
     }
+}
+
+/// Governance configuration update type.
+#[derive(Debug, Eq, PartialEq, Clone, BorshSerialize, BorshDeserialize)]
+pub struct GovernanceConfigUpdate {
+    pub chain_hash: Option<Hash>,
+    pub address_hash: Option<Hash>,
+    pub minimum_proposal_eta_delay: Option<u32>,
 }
 
 impl Sealed for GovernanceConfig {}

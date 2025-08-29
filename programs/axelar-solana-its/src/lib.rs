@@ -92,7 +92,7 @@ pub mod seed_prefixes {
     /// The seed prefix for deriving the deployment approval PDA
     pub const DEPLOYMENT_APPROVAL_SEED: &[u8] = b"deployment-approval";
 
-    /// The seed prefix for deriving the deployment approval PDA
+    /// The seed prefix for deriving the interchain transfer execute signing PDA
     pub const INTERCHAIN_TRANSFER_EXECUTE_SEED: &[u8] = b"interchain-transfer-execute";
 }
 

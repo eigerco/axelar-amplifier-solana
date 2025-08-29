@@ -1011,6 +1011,13 @@ async fn test_source_address_stays_consistent_through_the_transfer(
 
     // Extract the CallContract event to get the GMP payload first
     let call_contract_event = fetch_first_call_contract_event_from_tx(&tx);
+    
+    // Verify Gateway emits ITS as sender (not user-controlled program_account)
+    assert_eq!(
+        call_contract_event.sender_key,
+        axelar_solana_its::id(),
+        "Gateway should emit ITS program ID as sender"
+    );
     let gmp_payload = GMPPayload::decode(&call_contract_event.payload)?;
 
     // Extract the InterchainTransfer event from logs
@@ -1070,4 +1077,25 @@ async fn test_source_address_stays_consistent_through_the_transfer(
     assert_eq!(transfer_event.amount, transfer_amount);
 
     Ok(())
+}
+
+#[test_context(ItsTestContext)]
+#[should_panic(expected = "Invalid program account")]
+#[tokio::test]
+async fn test_outbound_transfer_validates_program_account(ctx: &mut ItsTestContext) {
+    // TODO This test will fail until we add program_account validation to process_outbound
+    let transfer_ix = axelar_solana_its::instruction::interchain_transfer(
+        ctx.solana_wallet,
+        ctx.solana_wallet,
+        ctx.deployed_interchain_token,
+        ctx.evm_chain_name.clone(),
+        vec![0u8; 20],
+        100,
+        ctx.solana_wallet,
+        spl_token_2022::id(),
+        0,
+        0,
+    ).unwrap();
+    
+    ctx.send_solana_tx(&[transfer_ix]).await.unwrap();
 }

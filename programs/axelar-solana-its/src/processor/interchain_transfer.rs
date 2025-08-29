@@ -162,7 +162,6 @@ pub(crate) fn process_inbound_transfer<'a>(
             &account_infos,
             &[&[
                 seed_prefixes::INTERCHAIN_TRANSFER_EXECUTE_SEED,
-                axelar_executable_accounts.its_root_pda.key.as_ref(),
                 program_account.key.as_ref(),
                 &[axelar_transfer_execute_bump],
             ]],

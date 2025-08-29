@@ -533,7 +533,7 @@ pub fn create_interchain_transfer_execute_pda(
     )?)
 }
 
-/// Derives the PDA for a [`TokenManager`].
+/// Derives the PDA for a [`InterchainTransferExecute`].
 #[inline]
 #[must_use]
 pub fn find_interchain_transfer_execute_pda(destination_program: &Pubkey) -> (Pubkey, u8) {

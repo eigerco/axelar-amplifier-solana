@@ -514,8 +514,7 @@ pub fn interchain_transfer_execute_pda(
     }
 }
 
-/// Tries to create the PDA for a [`Tokenmanager`] using the provided bump,
-/// falling back to `find_program_address` if the bump is invalid.
+/// Tries to create the PDA for a [`InterchainTransferExecute`] using the provided bump.
 ///
 /// # Errors
 ///

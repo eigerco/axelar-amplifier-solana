@@ -16,6 +16,7 @@ use solana_program::{system_program, sysvar};
 use spl_associated_token_account::get_associated_token_address_with_program_id;
 use typed_builder::TypedBuilder;
 
+use crate::find_interchain_transfer_execute_pda;
 use crate::state::{self, flow_limit};
 
 pub mod interchain_token;
@@ -1880,10 +1881,13 @@ fn derive_specific_its_accounts(
                     &mint_account,
                     &token_program,
                 );
+                let interchain_transfer_execute_key =
+                    find_interchain_transfer_execute_pda(&destination_account).0;
 
                 specific_accounts.push(AccountMeta::new(program_ata, false));
                 specific_accounts.push(AccountMeta::new_readonly(mpl_token_metadata::ID, false));
                 specific_accounts.push(AccountMeta::new(metadata_account_key, false));
+                specific_accounts.push(AccountMeta::new(interchain_transfer_execute_key, false));
                 specific_accounts.extend(execute_data.account_meta().iter().cloned());
             }
         }

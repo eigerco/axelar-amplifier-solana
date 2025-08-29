@@ -9,8 +9,8 @@ use solana_program::account_info::{next_account_info, AccountInfo};
 use solana_program::msg;
 use solana_program::program_error::ProgramError;
 
-use crate::assert_valid_its_root_pda;
-use crate::state::InterchainTokenService;
+use crate::state::interchain_transfer_execute::InterchainTransferExecute;
+use crate::create_interchain_transfer_execute_pda;
 
 /// The index of the first account that is expected to be passed to the
 /// destination program. The prepended accounts are:
@@ -79,7 +79,7 @@ impl MaybeAxelarInterchainTokenExecutablePayload for &[u8] {
         if !self.starts_with(AXELAR_INTERCHAIN_TOKEN_EXECUTE) {
             return None;
         }
-
+        
         let payload_bytes = self.get(AXELAR_INTERCHAIN_TOKEN_EXECUTE.len()..)?;
         let mut call_data_without_payload: AxelarInterchainTokenExecutablePayload =
             match borsh::from_slice(payload_bytes)
@@ -119,8 +119,16 @@ fn extract_interchain_token_execute_call_data<'a>(
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    let its_root_config = InterchainTokenService::load(signing_pda_account)?;
-    assert_valid_its_root_pda(signing_pda_account, its_root_config.bump)?;
+    let interchain_transfer_execute = InterchainTransferExecute::load(signing_pda_account)?;
+    if signing_pda_account.key
+        != &create_interchain_transfer_execute_pda(&crate::ID, interchain_transfer_execute.bump)?
+    {
+        msg!(
+            "Signing PDA account must be the interchain transfer execute pda: {}",
+            signing_pda_account.key
+        );
+        return Err(ProgramError::InvalidArgument);
+    }
 
     let GMPPayload::ReceiveFromHub(inner) = GMPPayload::decode(message_payload.raw_payload)
         .map_err(|_err| ProgramError::InvalidInstructionData)?

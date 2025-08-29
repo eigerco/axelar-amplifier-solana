@@ -123,9 +123,8 @@ pub(crate) fn process_inbound_transfer<'a>(
 
         let axelar_transfer_execute_bump = assert_valid_interchain_transfer_execute_pda(
             axelar_executable_accounts.interchain_transfer_execute_pda,
-            payer,
-            system_account,
-            axelar_executable_accounts.its_root_pda.key,
+            Some(payer),
+            Some(system_account),
             program_account.key,
         )?;
 

@@ -355,6 +355,9 @@ async fn test_call_contract_with_token(ctx: &mut ItsTestContext) -> anyhow::Resu
             spl_token_2022::id(),
         )
         .await;
+    
+    println!("{:?}", tx);
+    tx.result.clone()?;
 
     let ata = spl_associated_token_account::get_associated_token_address_with_program_id(
         &axelar_solana_memo_program::id(),

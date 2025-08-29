@@ -9,8 +9,8 @@ use solana_program::account_info::{next_account_info, AccountInfo};
 use solana_program::msg;
 use solana_program::program_error::ProgramError;
 
-use crate::state::interchain_transfer_execute::InterchainTransferExecute;
 use crate::create_interchain_transfer_execute_pda;
+use crate::state::interchain_transfer_execute::InterchainTransferExecute;
 
 /// The index of the first account that is expected to be passed to the
 /// destination program. The prepended accounts are:
@@ -79,7 +79,7 @@ impl MaybeAxelarInterchainTokenExecutablePayload for &[u8] {
         if !self.starts_with(AXELAR_INTERCHAIN_TOKEN_EXECUTE) {
             return None;
         }
-        
+
         let payload_bytes = self.get(AXELAR_INTERCHAIN_TOKEN_EXECUTE.len()..)?;
         let mut call_data_without_payload: AxelarInterchainTokenExecutablePayload =
             match borsh::from_slice(payload_bytes)

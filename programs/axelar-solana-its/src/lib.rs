@@ -549,8 +549,8 @@ pub fn find_interchain_transfer_execute_pda(destination_program: &Pubkey) -> (Pu
 /// Either create the interchain_transfer_execute pda or read it, and ensure it is derived properly.
 pub(crate) fn assert_valid_interchain_transfer_execute_pda<'a>(
     interchain_transfer_execute_pda_account: &AccountInfo<'a>,
-    payer: Option<&AccountInfo<'a>>,
-    system_account: Option<&AccountInfo<'a>>,
+    payer: &AccountInfo<'a>,
+    system_account: &AccountInfo<'a>,
     destination_program: &Pubkey,
 ) -> Result<u8, ProgramError> {
     let bump = if interchain_transfer_execute_pda_account.is_initialized_pda(&crate::id()) {
@@ -567,9 +567,6 @@ pub(crate) fn assert_valid_interchain_transfer_execute_pda<'a>(
         }
         interchain_transfer_execute.bump
     } else {
-        let payer = payer.unwrap();
-        let system_account = system_account.unwrap();
-
         let (expected_token_manager_pda, bump) =
             find_interchain_transfer_execute_pda(destination_program);
         if expected_token_manager_pda.ne(interchain_transfer_execute_pda_account.key) {

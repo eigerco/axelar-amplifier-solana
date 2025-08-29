@@ -123,8 +123,8 @@ pub(crate) fn process_inbound_transfer<'a>(
 
         let axelar_transfer_execute_bump = assert_valid_interchain_transfer_execute_pda(
             axelar_executable_accounts.interchain_transfer_execute_pda,
-            Some(payer),
-            Some(system_account),
+            payer,
+            system_account,
             program_account.key,
         )?;
 
@@ -185,7 +185,7 @@ fn build_axelar_interchain_token_execute(
     let token = axelar_its_executable_accounts.token_mint.key.to_bytes();
 
     let mut accounts = vec![
-        AccountMeta::new_readonly(*axelar_its_executable_accounts.its_root_pda.key, true),
+        AccountMeta::new(*axelar_its_executable_accounts.interchain_transfer_execute_pda.key, true),
         AccountMeta::new_readonly(
             *axelar_its_executable_accounts.message_payload_pda.key,
             false,

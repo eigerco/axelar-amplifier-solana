@@ -115,16 +115,18 @@ async fn test_canonical_token_with_fee_lock_unlock(ctx: &mut ItsTestContext) -> 
         user_balance,
     )?;
 
+    dbg!("WILL MINT");
     ctx.send_solana_tx(&[create_user_ata_ix, mint_to_user_ix])
         .await
         .unwrap();
+    dbg!("MINTED");
 
     // Test transfer
     let transfer_amount = 1000_u64;
     let clock_sysvar = ctx.solana_chain.get_sysvar::<Clock>().await;
     let transfer_ix = axelar_solana_its::instruction::interchain_transfer(
         ctx.solana_wallet,
-        user_ata,
+        ctx.solana_wallet,
         canonical_token_id,
         ctx.evm_chain_name.clone(),
         ctx.evm_signer.wallet.address().as_bytes().to_vec(),
@@ -266,7 +268,7 @@ async fn test_canonical_token_various_fee_configs(ctx: &mut ItsTestContext) -> a
     let clock_sysvar = ctx.solana_chain.get_sysvar::<Clock>().await;
     let transfer_ix = axelar_solana_its::instruction::interchain_transfer(
         ctx.solana_wallet,
-        user_ata,
+        ctx.solana_wallet,
         canonical_token_id,
         ctx.evm_chain_name.clone(),
         ctx.evm_signer.wallet.address().as_bytes().to_vec(),
@@ -405,7 +407,7 @@ async fn test_canonical_token_maximum_fee_cap(ctx: &mut ItsTestContext) -> anyho
     let clock_sysvar = ctx.solana_chain.get_sysvar::<Clock>().await;
     let transfer_ix = axelar_solana_its::instruction::interchain_transfer(
         ctx.solana_wallet,
-        user_ata,
+        ctx.solana_wallet,
         canonical_token_id,
         ctx.evm_chain_name.clone(),
         ctx.evm_signer.wallet.address().as_bytes().to_vec(),
@@ -630,7 +632,7 @@ async fn test_custom_token_with_fee_lock_unlock_fee(
     let clock_sysvar = ctx.solana_chain.get_sysvar::<Clock>().await;
     let transfer_ix = axelar_solana_its::instruction::interchain_transfer(
         ctx.solana_wallet,
-        user_ata,
+        ctx.solana_wallet,
         token_id,
         ctx.evm_chain_name.clone(),
         ctx.evm_signer.wallet.address().as_bytes().to_vec(),
@@ -688,7 +690,7 @@ async fn test_custom_token_with_fee_lock_unlock_fee(
         .interchain_transfer(
             token_id,
             ctx.solana_chain_name.clone(),
-            user_ata.to_bytes().into(),
+            ctx.solana_wallet.to_bytes().into(),
             inbound_transfer_amount.into(),
             vec![].into(),
             0.into(),

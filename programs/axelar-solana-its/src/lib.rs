@@ -496,7 +496,7 @@ pub fn deployment_approval_pda(
     }
 }
 
-/// Tries to create the PDA for a [`Tokenmanager`] using the provided bump,
+/// Tries to create the PDA for a [`InterchainTransferExecute`] using the provided bump,
 /// falling back to `find_program_address` if the bump is `None`.
 ///
 /// # Errors

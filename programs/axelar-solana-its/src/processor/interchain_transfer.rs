@@ -28,7 +28,9 @@ use crate::processor::token_manager as token_manager_processor;
 use crate::state::flow_limit::{self, FlowDirection, FlowSlot};
 use crate::state::token_manager::{self, TokenManager};
 use crate::{
-    assert_valid_flow_slot_pda, assert_valid_interchain_transfer_execute_pda, assert_valid_token_manager_pda, event, initiate_interchain_execute_pda_if_empty, seed_prefixes, FromAccountInfoSlice, Validate
+    assert_valid_flow_slot_pda, assert_valid_interchain_transfer_execute_pda,
+    assert_valid_token_manager_pda, event, initiate_interchain_execute_pda_if_empty, seed_prefixes,
+    FromAccountInfoSlice, Validate,
 };
 
 use super::gmp::{self, GmpAccounts};
@@ -164,7 +166,13 @@ pub(crate) fn process_inbound_transfer<'a>(
             ]],
         )?;
 
-        initiate_interchain_execute_pda_if_empty(axelar_executable_accounts.interchain_transfer_execute_pda, payer, system_account, program_account.key, axelar_transfer_execute_bump)?
+        initiate_interchain_execute_pda_if_empty(
+            axelar_executable_accounts.interchain_transfer_execute_pda,
+            payer,
+            system_account,
+            program_account.key,
+            axelar_transfer_execute_bump,
+        )?
     }
 
     Ok(())
@@ -184,7 +192,12 @@ fn build_axelar_interchain_token_execute(
     let token = axelar_its_executable_accounts.token_mint.key.to_bytes();
 
     let mut accounts = vec![
-        AccountMeta::new(*axelar_its_executable_accounts.interchain_transfer_execute_pda.key, true),
+        AccountMeta::new(
+            *axelar_its_executable_accounts
+                .interchain_transfer_execute_pda
+                .key,
+            true,
+        ),
         AccountMeta::new_readonly(
             *axelar_its_executable_accounts.message_payload_pda.key,
             false,

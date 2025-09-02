@@ -132,12 +132,14 @@ fn extract_interchain_token_execute_call_data<'a>(
         return Err(ProgramError::InvalidInstructionData);
     };
 
-    assert_valid_interchain_transfer_execute_pda(signing_pda_account, &Pubkey::new_from_array(
-        (transfer.destination_address.iter().as_slice())
-            .try_into()
-            .map_err(|_err| ProgramError::InvalidInstructionData)?
-    ))?;
-
+    assert_valid_interchain_transfer_execute_pda(
+        signing_pda_account,
+        &Pubkey::new_from_array(
+            (transfer.destination_address.iter().as_slice())
+                .try_into()
+                .map_err(|_err| ProgramError::InvalidInstructionData)?,
+        ),
+    )?;
 
     let inner_payload = AxelarMessagePayload::decode(transfer.data.as_ref())?;
     if !inner_payload.solana_accounts().eq(program_accounts) {

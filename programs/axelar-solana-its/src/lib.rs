@@ -549,8 +549,6 @@ pub fn find_interchain_transfer_execute_pda(destination_program: &Pubkey) -> (Pu
 /// Either create the interchain_transfer_execute pda or read it, and ensure it is derived properly.
 pub(crate) fn assert_valid_interchain_transfer_execute_pda<'a>(
     interchain_transfer_execute_pda_account: &AccountInfo<'a>,
-    payer: &AccountInfo<'a>,
-    system_account: &AccountInfo<'a>,
     destination_program: &Pubkey,
 ) -> Result<u8, ProgramError> {
     let bump = if interchain_transfer_execute_pda_account.is_initialized_pda(&crate::id()) {
@@ -573,6 +571,21 @@ pub(crate) fn assert_valid_interchain_transfer_execute_pda<'a>(
             msg!("Invalid InterchainTransferExecute PDA provided");
             return Err(ProgramError::InvalidArgument);
         }
+        bump
+    };
+
+    Ok(bump)
+}
+
+/// Either create the interchain_transfer_execute pda or read it, and ensure it is derived properly.
+pub(crate) fn initiate_interchain_execute_pda_if_empty<'a>(
+    interchain_transfer_execute_pda_account: &AccountInfo<'a>,
+    payer: &AccountInfo<'a>,
+    system_account: &AccountInfo<'a>,
+    destination_program: &Pubkey,
+    bump: u8,
+) -> Result<(), ProgramError> {
+    if !interchain_transfer_execute_pda_account.is_initialized_pda(&crate::id()) {
         let interchain_transfer_execute = InterchainTransferExecute::new(bump);
         interchain_transfer_execute.init(
             &crate::id(),
@@ -585,10 +598,9 @@ pub(crate) fn assert_valid_interchain_transfer_execute_pda<'a>(
                 &[bump],
             ],
         )?;
-        bump
     };
 
-    Ok(bump)
+    Ok(())
 }
 
 /// Creates an associated token account for the given program address and token

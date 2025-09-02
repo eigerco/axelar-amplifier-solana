@@ -28,8 +28,7 @@ use crate::processor::token_manager as token_manager_processor;
 use crate::state::flow_limit::{self, FlowDirection, FlowSlot};
 use crate::state::token_manager::{self, TokenManager};
 use crate::{
-    assert_valid_flow_slot_pda, assert_valid_interchain_transfer_execute_pda,
-    assert_valid_token_manager_pda, event, seed_prefixes, FromAccountInfoSlice, Validate,
+    assert_valid_flow_slot_pda, assert_valid_interchain_transfer_execute_pda, assert_valid_token_manager_pda, event, initiate_interchain_execute_pda_if_empty, seed_prefixes, FromAccountInfoSlice, Validate
 };
 
 use super::gmp::{self, GmpAccounts};
@@ -123,8 +122,6 @@ pub(crate) fn process_inbound_transfer<'a>(
 
         let axelar_transfer_execute_bump = assert_valid_interchain_transfer_execute_pda(
             axelar_executable_accounts.interchain_transfer_execute_pda,
-            payer,
-            system_account,
             program_account.key,
         )?;
 
@@ -166,6 +163,8 @@ pub(crate) fn process_inbound_transfer<'a>(
                 &[axelar_transfer_execute_bump],
             ]],
         )?;
+
+        initiate_interchain_execute_pda_if_empty(axelar_executable_accounts.interchain_transfer_execute_pda, payer, system_account, program_account.key, axelar_transfer_execute_bump)?
     }
 
     Ok(())

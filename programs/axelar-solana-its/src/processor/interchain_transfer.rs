@@ -820,7 +820,6 @@ impl<'a> FromAccountInfoSlice<'a> for GiveTokenAccounts<'a> {
 }
 
 struct AxelarInterchainTokenExecutableAccounts<'a> {
-    its_root_pda: &'a AccountInfo<'a>,
     message_payload_pda: &'a AccountInfo<'a>,
     token_program: &'a AccountInfo<'a>,
     token_mint: &'a AccountInfo<'a>,
@@ -860,7 +859,6 @@ impl<'a> FromAccountInfoSlice<'a> for AxelarInterchainTokenExecutableAccounts<'a
             .ok_or(ProgramError::NotEnoughAccountKeys)?;
 
         Ok(Self {
-            its_root_pda: give_token_accounts.its_root_pda,
             message_payload_pda: give_token_accounts.message_payload_pda,
             token_program: give_token_accounts.token_program,
             token_mint: give_token_accounts.token_mint,

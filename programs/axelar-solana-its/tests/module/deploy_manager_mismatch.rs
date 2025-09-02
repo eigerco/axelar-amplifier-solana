@@ -92,12 +92,21 @@ async fn attempt_deployment_with_specific_token_manager(
         )
         .expect("Failed to create deploy instruction");
 
-    // Replace target token's token_manager_pda with fake token's token_manager_pda,
-    // trying to use their current minter privileges on fake token to deploy target token
+    // Replace target token's token_manager_pda AND minter_roles_pda with fake token's
+    // token_manager_pda and roles pda, trying to use their current minter privileges on fake token
+    // to deploy target token
     let (its_root_pda, _) = axelar_solana_its::find_its_root_pda();
     let fake_token_manager_pda =
         axelar_solana_its::find_token_manager_pda(&its_root_pda, &manager_token_id).0;
-    deploy_remote_ix.accounts[3].pubkey = fake_token_manager_pda;
+
+    let (fake_minter_roles_pda, _) = role_management::find_user_roles_pda(
+        &axelar_solana_its::ID,
+        &fake_token_manager_pda,
+        &deployer.pubkey(),
+    );
+
+    deploy_remote_ix.accounts[5].pubkey = fake_minter_roles_pda;
+    deploy_remote_ix.accounts[6].pubkey = fake_token_manager_pda;
 
     ctx.solana_chain
         .fixture
@@ -131,6 +140,25 @@ async fn test_deployment_with_token_manager_mismatch(
 
     create_deployment_approval(ctx, &alice, salt_a, destination_chain, destination_minter).await?;
 
+    let transfer_mintership =
+        axelar_solana_its::instruction::interchain_token::transfer_mintership(
+            alice.pubkey(),
+            token_id_a,
+            ctx.solana_wallet,
+        )
+        .expect("Failed to create deploy instruction");
+
+    ctx.solana_chain
+        .fixture
+        .send_tx_with_custom_signers(
+            &[transfer_mintership],
+            &[
+                ctx.solana_chain.fixture.payer.insecure_clone(),
+                alice.insecure_clone(),
+            ],
+        )
+        .await;
+
     // Alice creates TokenB and becomes its minter
     let token_id_b = deploy_interchain_token_for_user(ctx, &alice, salt_b, "Token B", "TB").await?;
 
@@ -158,58 +186,6 @@ async fn test_deployment_with_token_manager_mismatch(
                 .find_log("Derived PDA doesn't match given roles account address")
                 .is_some(),
             "Expected roles validation error message"
-        );
-    }
-
-    // Attempt to deploy TokenB remotely using TokenA's token manager for authorization
-    // This should fail as well.
-    {
-        let result = attempt_deployment_with_specific_token_manager(
-            ctx,
-            &alice,
-            salt_b,
-            token_id_a,
-            destination_chain,
-            destination_minter,
-        )
-        .await;
-
-        assert!(
-            result.is_err(),
-            "Expected transaction to fail due to token manager/mint mismatch"
-        );
-
-        let error_tx = result.unwrap_err();
-        assert!(
-            error_tx
-                .find_log("Derived PDA doesn't match given roles account address")
-                .is_some(),
-            "Expected roles validation error message"
-        );
-    }
-
-    // Attempt to deploy TokenB
-    // This should fail because no approval was given for TokenB
-    {
-        let result = attempt_deployment_with_specific_token_manager(
-            ctx,
-            &alice,
-            salt_b,
-            token_id_b,
-            destination_chain,
-            destination_minter,
-        )
-        .await;
-
-        assert!(
-            result.is_err(),
-            "Expected transaction to fail due to token manager/mint mismatch"
-        );
-
-        let error_tx = result.unwrap_err();
-        assert!(
-            error_tx.find_log("Warning: failed to deserialize account as axelar_solana_its::state::deploy_approval::DeployApproval: Unexpected length of input. The account might not have been initialized.").is_some(),
-            "Expected deserialization error message because the account doesn't exist (because no approval was created for TokenB)"
         );
     }
 

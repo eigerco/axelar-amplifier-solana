@@ -172,7 +172,7 @@ pub(crate) fn process_inbound_transfer<'a>(
             system_account,
             program_account.key,
             axelar_transfer_execute_bump,
-        )?
+        )?;
     }
 
     Ok(())

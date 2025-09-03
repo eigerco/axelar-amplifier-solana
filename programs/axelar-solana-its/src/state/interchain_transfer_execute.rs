@@ -10,7 +10,7 @@ use solana_program::msg;
 use solana_program::program_error::ProgramError;
 use solana_program::program_pack::{Pack, Sealed};
 
-/// Signed PDA to prove that ITS called an executable indeed. Only stores it's bumb.
+/// Signed PDA to prove that ITS called an executable indeed. Only stores it's bump.
 #[derive(Debug, Eq, PartialEq, Clone, BorshSerialize, BorshDeserialize)]
 pub struct InterchainTransferExecute {
     /// The interchain transfer execute PDA bump seed.

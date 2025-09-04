@@ -1,9 +1,6 @@
 use borsh::BorshDeserialize;
 use solana_program_test::tokio;
 use solana_sdk::{clock::Clock, pubkey::Pubkey, signer::Signer};
-use spl_associated_token_account::{
-    get_associated_token_address_with_program_id, instruction::create_associated_token_account,
-};
 use test_context::test_context;
 
 use axelar_solana_gateway_test_fixtures::base::FindLog;
@@ -100,23 +97,12 @@ async fn test_outbound_message_fails_when_paused(ctx: &mut ItsTestContext) {
     let token_manager = TokenManager::try_from_slice(&data).unwrap();
     let token_address = token_manager.token_address;
 
-    let token_account = get_associated_token_address_with_program_id(
-        &ctx.solana_wallet,
-        &token_address,
-        &spl_token_2022::id(),
-    );
-
-    let create_ata_ix = create_associated_token_account(
-        &ctx.solana_wallet,
-        &ctx.solana_wallet,
-        &token_address,
-        &spl_token_2022::id(),
-    );
     let clock_sysvar = ctx.solana_chain.get_sysvar::<Clock>().await;
     let mint_ix = axelar_solana_its::instruction::interchain_token::mint(
+        ctx.solana_wallet,
         ctx.deployed_interchain_token,
         token_address,
-        token_account,
+        ctx.solana_wallet,
         ctx.solana_wallet,
         spl_token_2022::id(),
         900,
@@ -124,7 +110,7 @@ async fn test_outbound_message_fails_when_paused(ctx: &mut ItsTestContext) {
     .unwrap();
     let transfer_ix = axelar_solana_its::instruction::interchain_transfer(
         ctx.solana_wallet,
-        token_account,
+        ctx.solana_wallet,
         ctx.deployed_interchain_token,
         ctx.evm_chain_name.clone(),
         ctx.evm_signer.wallet.address().as_bytes().to_vec(),
@@ -137,7 +123,7 @@ async fn test_outbound_message_fails_when_paused(ctx: &mut ItsTestContext) {
     .unwrap();
 
     let tx_metadata = ctx
-        .send_solana_tx(&[create_ata_ix, mint_ix, transfer_ix])
+        .send_solana_tx(&[mint_ix, transfer_ix])
         .await
         .unwrap_err();
 

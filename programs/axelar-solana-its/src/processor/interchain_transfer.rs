@@ -58,8 +58,7 @@ pub(super) fn is_valid_token_account(
 ///
 /// For incoming `InterchainTransfer` messages, the behaviour of the
 /// [`NativeInterchainToken`], [`MintBurn`] and [`MintBurnFrom`]
-/// [`TokenManager`]s are the same: the token is minted to the destination
-/// wallet's associated token account.
+/// [`TokenManager`]s are the same: the token is minted to the destination token account.
 ///
 /// As for [`LockUnlock`] and [`LockUnlockFee`] [`TokenManager`]s, they are
 /// typically used in the home chain of the token, thus, if we're getting an
@@ -75,6 +74,24 @@ pub(super) fn is_valid_token_account(
 /// calculate the fee according to the fee configuration and call the correct
 /// instruction to keep the fee withheld wherever the user defined they should
 /// be withheld.
+///
+/// # Destination Address
+///
+/// When processing incoming token transfers, the program handles the destination address as
+/// follows:
+///
+/// 1. **If `destination_address` is a Token Account**: Transfers funds directly to that account.
+///
+/// 2. **If `destination_address` is NOT a Token Account**: Derives and uses the Associated Token
+///    Account (ATA) for that address.
+///    
+///    For security, the program verifies that the ATA's owner matches the `destination_address`:
+///    - **SPL Token 2022 ATAs**: Always safe (have `ImmutableOwner` extension preventing ownership
+///    changes)
+///    - **SPL Token ATAs**: Can have ownership transferred, creating a security risk
+///    
+///    If ownership verification fails, the transaction is rejected to prevent funds being sent to
+///    accounts controlled by unexpected parties./
 ///
 /// # Errors
 ///

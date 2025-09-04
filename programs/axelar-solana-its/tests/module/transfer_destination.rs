@@ -57,6 +57,7 @@ async fn create_direct_token_account(
         .get_rent(spl_token_2022::state::Account::LEN)
         .await;
 
+    #[allow(clippy::disallowed_methods)]
     let create_account_ix = solana_sdk::system_instruction::create_account(
         &ctx.solana_wallet,
         &token_account,

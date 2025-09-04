@@ -103,7 +103,25 @@ pub(crate) fn process_inbound_transfer<'a>(
         return Err(ProgramError::InvalidInstructionData);
     };
 
-    let transferred_amount = give_token(&parsed_accounts, &token_manager, converted_amount)?;
+    // Check if source is already a valid token account for this mint
+    let use_destination_directly = is_valid_token_account(
+        parsed_accounts.destination,
+        parsed_accounts.token_program.key,
+        parsed_accounts.token_mint.key,
+    );
+
+    let transferred_amount = give_token(
+        &parsed_accounts,
+        &token_manager,
+        converted_amount,
+        use_destination_directly,
+    )?;
+
+    let destination_token_account = if use_destination_directly {
+        *parsed_accounts.destination.key
+    } else {
+        *parsed_accounts.destination_ata.key
+    };
 
     event::InterchainTransferReceived {
         command_id: command_id(&message.cc_id.chain, &message.cc_id.id),
@@ -111,6 +129,7 @@ pub(crate) fn process_inbound_transfer<'a>(
         source_chain,
         source_address: payload.source_address.to_vec(),
         destination_address: *parsed_accounts.destination.key,
+        destination_token_account,
         amount: transferred_amount,
         data_hash: if payload.data.is_empty() {
             [0; 32]
@@ -261,6 +280,7 @@ pub(crate) fn process_outbound_transfer<'a>(
     let transfer_event = event::InterchainTransfer {
         token_id,
         source_address: *take_token_accounts.wallet.key,
+        source_token_account: *take_token_accounts.source_ata.key,
         destination_chain,
         destination_address,
         amount,
@@ -316,19 +336,13 @@ fn give_token(
     accounts: &GiveTokenAccounts<'_>,
     token_manager: &TokenManager,
     amount: u64,
+    use_destination_directly: bool,
 ) -> Result<u64, ProgramError> {
     token_manager_processor::validate_token_manager_type(
         token_manager.ty,
         accounts.token_mint,
         accounts.token_manager_pda,
     )?;
-
-    // Check if source is already a valid token account for this mint
-    let use_destination_directly = is_valid_token_account(
-        accounts.destination,
-        accounts.token_program.key,
-        accounts.token_mint.key,
-    );
 
     if !use_destination_directly {
         // The `source` is a wallet, let's make sure the ATA exists. This will also ensure the

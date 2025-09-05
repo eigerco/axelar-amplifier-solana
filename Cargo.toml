@@ -55,7 +55,7 @@ std_instead_of_alloc = "allow"
 wildcard_imports = "allow"
 shadow_unrelated = "allow"
 module_name_repetitions = "allow"
-semicolon_outside_block = "allow" # remove this after we update rust-toolchain.toml -- buggy lint
+semicolon_outside_block = "allow"           # remove this after we update rust-toolchain.toml -- buggy lint
 similar_names = "allow"
 allow_attributes_without_reason = "allow"
 allow_attributes = "allow"
@@ -100,8 +100,16 @@ rust_2018_idioms = { level = "allow", priority = 0 }
 unreachable_pub = { level = "warn", priority = -1 }
 unused_imports = { level = "warn", priority = -1 }
 unused_must_use = { level = "deny", priority = -1 }
+# Fix for Solana lint warning
+# Remove after https://github.com/solana-foundation/anchor/pull/3748 is released
+unexpected_cfgs = { level = "warn", check-cfg = [
+	'cfg(target_os, values("solana"))',
+] }
+
 
 [workspace.dependencies]
+anchor-lang = { version = "0.31.1", features = ["event-cpi"] }
+anchor-spl = "0.31.1"
 alloy-primitives = "0.7"
 alloy-sol-types = "0.7"
 anyhow = "1"
@@ -114,7 +122,7 @@ bitvec = "1.0.1"
 bnum = { version = "0.10", features = ["serde"] }
 borsh = { version = "1", features = ["derive"] }
 bs58 = "0.5.1"
-bytemuck = { version = "1", features = ["derive"] }
+bytemuck = { version = "1", features = ["derive", "min_const_generics"] }
 cosmwasm-schema = "2"
 cosmwasm-std = "1.5"
 ed25519-dalek = "2"
@@ -174,6 +182,7 @@ proc-macro2 = "1"
 # solana programs
 axelar-solana-its = { path = "programs/axelar-solana-its", default-features = false }
 axelar-solana-gas-service = { path = "programs/axelar-solana-gas-service", default-features = false }
+axelar-solana-gas-service-v2 = { path = "programs/axelar-solana-gas-service-v2", default-features = false }
 axelar-solana-memo-program = { path = "programs/axelar-solana-memo-program", default-features = false }
 axelar-solana-multicall = { path = "programs/axelar-solana-multicall", default-features = false }
 axelar-solana-gateway = { path = "programs/axelar-solana-gateway", default-features = false }

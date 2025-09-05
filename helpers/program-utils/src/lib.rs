@@ -8,7 +8,8 @@ use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::sysvar::Sysvar;
-use solana_program::{msg, system_program, sysvar};
+use solana_program::{msg, sysvar};
+use solana_sdk_ids::system_program;
 
 pub mod pda;
 /// mini helper to log from native Rust or to the program log

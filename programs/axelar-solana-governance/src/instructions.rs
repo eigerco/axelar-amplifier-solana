@@ -26,7 +26,7 @@ pub enum GovernanceInstruction {
     UpdateConfig(GovernanceConfigUpdate),
 
     /// A GMP instruction coming from the axelar network.
-    /// The very first accounts are the gateways accounts:  
+    /// The very first accounts are the gateways accounts:
     ///
     /// 0. [WRITE] Gateway incoming message PDA account
     /// 1. [] Message payload account
@@ -157,7 +157,9 @@ pub mod builder {
     use solana_program::keccak::hash;
     use solana_program::program_error::ProgramError;
     use solana_program::pubkey::Pubkey;
-    use solana_program::{bpf_loader_upgradeable, msg, system_program};
+    #[allow(deprecated)]
+    use solana_program::{bpf_loader_upgradeable, msg};
+    use solana_sdk_ids::system_program;
 
     use super::GovernanceInstruction;
     use crate::processor::{

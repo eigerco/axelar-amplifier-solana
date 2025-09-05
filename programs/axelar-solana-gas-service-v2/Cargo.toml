@@ -17,6 +17,8 @@ bytemuck.workspace = true
 [dev-dependencies]
 axelar-solana-gateway-test-fixtures.workspace = true
 axelar-solana-gas-service.workspace = true
+mollusk-svm.workspace = true
+solana-sdk.workspace = true
 
 [lints]
 workspace = true

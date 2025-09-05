@@ -3,10 +3,11 @@
 use std::fmt::Debug;
 
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
+#[allow(deprecated)]
+use solana_program::system_program;
 use solana_program::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
-    system_program,
 };
 
 use crate::seed_prefixes;

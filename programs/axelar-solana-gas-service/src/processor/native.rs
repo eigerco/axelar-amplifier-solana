@@ -12,6 +12,7 @@ use solana_program::msg;
 use solana_program::program::invoke;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
+#[allow(deprecated)]
 use solana_program::system_instruction;
 
 #[allow(clippy::too_many_arguments)]

@@ -13,9 +13,10 @@ use role_management::processor::{
 use role_management::state::UserRoles;
 use solana_program::account_info::{next_account_info, AccountInfo};
 use solana_program::entrypoint::ProgramResult;
+use solana_program::msg;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
-use solana_program::{msg, system_program};
+use solana_sdk_ids::system_program;
 use token_manager::{handover_mint_authority, SetFlowLimitAccounts};
 
 use crate::instruction::InterchainTokenServiceInstruction;

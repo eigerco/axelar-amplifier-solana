@@ -115,11 +115,9 @@ async fn test_canonical_token_with_fee_lock_unlock(ctx: &mut ItsTestContext) -> 
         user_balance,
     )?;
 
-    dbg!("WILL MINT");
     ctx.send_solana_tx(&[create_user_ata_ix, mint_to_user_ix])
         .await
         .unwrap();
-    dbg!("MINTED");
 
     // Test transfer
     let transfer_amount = 1000_u64;

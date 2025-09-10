@@ -183,6 +183,7 @@ mollusk-svm = "0.5.1"
 
 # solana programs
 axelar-solana-its = { path = "programs/axelar-solana-its", default-features = false }
+axelar-solana-operators = { path = "programs/axelar-solana-operators", default-features = false }
 axelar-solana-gas-service = { path = "programs/axelar-solana-gas-service", default-features = false }
 axelar-solana-gas-service-v2 = { path = "programs/axelar-solana-gas-service-v2", default-features = false }
 axelar-solana-memo-program = { path = "programs/axelar-solana-memo-program", default-features = false }

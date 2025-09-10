@@ -1253,6 +1253,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "axelar-solana-operators"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "mollusk-svm",
+ "program-utils",
+ "solana-sdk",
+ "solana-sdk-ids",
+]
+
+[[package]]
 name = "axum"
 version = "0.6.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"

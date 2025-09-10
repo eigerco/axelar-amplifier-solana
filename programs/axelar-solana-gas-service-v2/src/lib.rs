@@ -180,13 +180,3 @@ pub mod axelar_solana_gas_service_v2 {
         instructions::refund_native_fees::refund_native_fees(ctx, tx_hash, log_index, fees)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn print_discriminators() {
-        println!("{:?}", instruction::Initialize::DISCRIMINATOR);
-    }
-}

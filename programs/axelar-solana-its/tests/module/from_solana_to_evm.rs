@@ -1075,3 +1075,74 @@ async fn test_source_address_stays_consistent_through_the_transfer(
 
     Ok(())
 }
+
+// TODO Do the same for evm to solana transfers
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_transfer_with_pda_as_source(
+    ctx: &mut ItsTestContext,
+) -> anyhow::Result<()> {
+    let salt = solana_sdk::keccak::hash(b"PDAValidationTestToken").0;
+    let deploy_local_ix = axelar_solana_its::instruction::deploy_interchain_token(
+        ctx.solana_wallet,
+        salt,
+        "PDA Test Token".to_owned(),
+        "PDT".to_owned(),
+        9,
+        1000,
+        Some(ctx.solana_wallet),
+    )?;
+
+    ctx.send_solana_tx(&[deploy_local_ix]).await.unwrap();
+
+    let token_id = axelar_solana_its::interchain_token_id(&ctx.solana_wallet, &salt);
+    let (its_root_pda, _) = axelar_solana_its::find_its_root_pda();
+    let (interchain_token_mint, _) =
+        axelar_solana_its::find_interchain_token_pda(&its_root_pda, &token_id);
+
+    let transfer_amount = 50;
+    let destination_address = b"0x1234567890123456789012345678901234567890".to_vec();
+
+    let mock_program_id = solana_program::pubkey::Pubkey::new_unique();
+    let correct_pda_seeds = vec![b"test".to_vec(), b"pda".to_vec()];
+    let wrong_pda_seeds = vec![b"wrong".to_vec(), b"seeds".to_vec()];
+    
+    let correct_seed_refs: Vec<&[u8]> = correct_pda_seeds.iter().map(|s| s.as_slice()).collect();
+    let (actual_pda_wallet, _bump) = solana_program::pubkey::Pubkey::find_program_address(
+        &correct_seed_refs, 
+        &mock_program_id
+    );
+    
+    // Test that we can create instructions with PDA params (validates instruction building)
+    let _valid_pda_ix = axelar_solana_its::instruction::interchain_transfer(
+        ctx.solana_wallet,
+        actual_pda_wallet,
+        token_id,
+        ctx.evm_chain_name.clone(),
+        destination_address.clone(),
+        transfer_amount,
+        interchain_token_mint,
+        spl_token_2022::id(),
+        0,
+        Some(mock_program_id),
+        Some(correct_pda_seeds),
+    )?;
+
+    let _invalid_pda_ix = axelar_solana_its::instruction::interchain_transfer(
+        ctx.solana_wallet,
+        actual_pda_wallet,
+        token_id,
+        ctx.evm_chain_name.clone(),
+        destination_address.clone(),
+        transfer_amount,
+        interchain_token_mint,
+        spl_token_2022::id(),
+        0,
+        Some(mock_program_id),
+        Some(wrong_pda_seeds),
+    )?;
+
+    // TODO Now send the txs and check the results.
+
+    Ok(())
+}

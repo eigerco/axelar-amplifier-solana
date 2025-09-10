@@ -1,13 +1,8 @@
-use crate::state::Config;
+use crate::state::Treasury;
 use anchor_lang::prelude::*;
+use axelar_solana_operators::OperatorAccount;
 
 /// Initialize the configuration PDA.
-///
-/// Accounts expected:
-/// 0. `[signer, writable]` The account (`payer`) paying for PDA creation
-/// 1. `[]` The `operator` account of this PDA.
-/// 2. `[writable]` The `config_pda` account to be created.
-/// 3. `[]` The `system_program` account.
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     #[account(mut)]
@@ -16,24 +11,31 @@ pub struct Initialize<'info> {
     pub operator: Signer<'info>,
 
     #[account(
+        seeds = [
+            OperatorAccount::SEED_PREFIX,
+            operator.key().as_ref(),
+        ],
+        bump = operator_pda.bump,
+        seeds::program = axelar_solana_operators::ID
+    )]
+    pub operator_pda: Account<'info, OperatorAccount>,
+
+    pub system_program: Program<'info, System>,
+
+    #[account(
         init,
-        space = Config::DISCRIMINATOR.len() + Config::INIT_SPACE,
+        space = Treasury::DISCRIMINATOR.len() + Treasury::INIT_SPACE,
         payer = payer,
         seeds = [
-            Config::SEED_PREFIX,
+            Treasury::SEED_PREFIX,
         ],
         bump,
     )]
-    pub config_pda: AccountLoader<'info, Config>,
-
-    pub system_program: Program<'info, System>,
+    pub treasury: Account<'info, Treasury>,
 }
 
 pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-    let config_pda = &mut ctx.accounts.config_pda.load_init()?;
-
-    config_pda.operator = ctx.accounts.operator.key();
-    config_pda.bump = ctx.bumps.config_pda;
+    ctx.accounts.treasury.bump = ctx.bumps.treasury;
 
     Ok(())
 }

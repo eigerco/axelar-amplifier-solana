@@ -1,13 +1,8 @@
-use crate::state::Config;
+use crate::state::Treasury;
 use anchor_lang::{prelude::*, system_program};
 use axelar_solana_gas_service_events::events::NativeGasAddedEvent;
 
 /// Add more native SOL gas to an existing transaction.
-///
-/// Accounts expected:
-/// 1. `[signer, writable]` The account (`sender`) providing the additional lamports.
-/// 2. `[writable]` The `config_pda` account that receives the additional lamports.
-/// 3. `[]` The `system_program` account.
 #[event_cpi]
 #[derive(Accounts)]
 pub struct AddNativeGas<'info> {
@@ -15,13 +10,13 @@ pub struct AddNativeGas<'info> {
     pub sender: Signer<'info>,
 
     #[account(
-    	mut,
+        mut,
         seeds = [
-            Config::SEED_PREFIX,
+            Treasury::SEED_PREFIX,
         ],
-        bump = config_pda.load()?.bump,
+        bump = treasury.bump,
     )]
-    pub config_pda: AccountLoader<'info, Config>,
+    pub treasury: Account<'info, Treasury>,
 
     pub system_program: Program<'info, System>,
 }
@@ -38,21 +33,21 @@ pub fn add_native_gas(
         return Err(ProgramError::InvalidInstructionData.into());
     }
 
-    let config_pda_account_info = &ctx.accounts.config_pda.to_account_info();
+    let treasury_account_info = &ctx.accounts.treasury.to_account_info();
 
     system_program::transfer(
         CpiContext::new(
             ctx.accounts.system_program.to_account_info(),
             system_program::Transfer {
                 from: ctx.accounts.sender.to_account_info(),
-                to: config_pda_account_info.clone(),
+                to: treasury_account_info.clone(),
             },
         ),
         gas_fee_amount,
     )?;
 
     emit_cpi!(NativeGasAddedEvent {
-        config_pda: *config_pda_account_info.key,
+        config_pda: *treasury_account_info.key,
         tx_hash,
         log_index,
         refund_address,

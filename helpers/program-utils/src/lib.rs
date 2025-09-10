@@ -170,6 +170,37 @@ pub fn transfer_lamports(
     Ok(())
 }
 
+/// Macro for transferring lamports between accounts that implement the Lamports trait
+///
+/// # Requirements
+///
+/// 1. The `from` account must be owned by the executing program.
+/// 2. Both accounts must be marked `mut`.
+/// 3. The total lamports **before** the transaction must equal to total lamports **after**
+///    the transaction.
+/// 4. `lamports` field of both account infos should not currently be borrowed.
+///
+/// # Examples
+/// ```
+/// transfer_lamports_anchor!(
+/// 	ctx.accounts.from_account,
+/// 	ctx.accounts.to_account,
+/// 	amount
+/// );
+/// ```
+#[macro_export]
+macro_rules! transfer_lamports_anchor {
+    ($from:expr, $to:expr, $amount:expr) => {{
+        if $from.get_lamports() < $amount {
+            return Err(anchor_lang::error::Error::from(
+                anchor_lang::solana_program::program_error::ProgramError::InsufficientFunds,
+            ));
+        }
+        $from.sub_lamports($amount)?;
+        $to.add_lamports($amount)?;
+    }};
+}
+
 /// Checks if the key is from system account
 pub fn validate_system_account_key(key: &Pubkey) -> Result<(), ProgramError> {
     if !system_program::check_id(key) {

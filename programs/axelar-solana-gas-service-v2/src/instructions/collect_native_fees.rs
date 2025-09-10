@@ -1,5 +1,7 @@
-use crate::state::Config;
+use crate::state::Treasury;
 use anchor_lang::prelude::*;
+use axelar_solana_operators::OperatorAccount;
+use program_utils::transfer_lamports_anchor;
 
 /// Collect accrued native SOL fees (operator only).
 ///
@@ -9,17 +11,26 @@ use anchor_lang::prelude::*;
 /// 3. `[writable]` The `receiver` account where the collected lamports will be sent.
 #[derive(Accounts)]
 pub struct CollectNativeFees<'info> {
-    #[account(address = config_pda.load()?.operator)]
     pub operator: Signer<'info>,
 
     #[account(
-    	mut,
         seeds = [
-            Config::SEED_PREFIX,
+            OperatorAccount::SEED_PREFIX,
+            operator.key().as_ref(),
         ],
-        bump = config_pda.load()?.bump,
+        bump = operator_pda.bump,
+        seeds::program = axelar_solana_operators::ID
     )]
-    pub config_pda: AccountLoader<'info, Config>,
+    pub operator_pda: Account<'info, OperatorAccount>,
+
+    #[account(
+        mut,
+        seeds = [
+            Treasury::SEED_PREFIX,
+        ],
+        bump = treasury.bump,
+    )]
+    pub treasury: Account<'info, Treasury>,
 
     /// CHECK: Can be any account to receive funds
     #[account(mut)]
@@ -32,13 +43,11 @@ pub fn collect_native_fees(ctx: Context<CollectNativeFees>, amount: u64) -> Resu
         return Err(ProgramError::InvalidInstructionData.into());
     }
 
-    // TODO(v2) consider making this a utility function in program-utils
-    // similar to transfer_lamports
-    if ctx.accounts.config_pda.get_lamports() < amount {
-        return Err(ProgramError::InsufficientFunds.into());
-    }
-    ctx.accounts.config_pda.sub_lamports(amount)?;
-    ctx.accounts.receiver.add_lamports(amount)?;
+    transfer_lamports_anchor!(
+        ctx.accounts.treasury.to_account_info(),
+        ctx.accounts.receiver.to_account_info(),
+        amount
+    );
 
     Ok(())
 }

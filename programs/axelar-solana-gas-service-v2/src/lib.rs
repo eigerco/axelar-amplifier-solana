@@ -56,11 +56,6 @@ pub mod axelar_solana_gas_service_v2 {
         instructions::initialize::initialize(ctx)
     }
 
-    #[instruction(discriminator = GasServiceDiscriminators::TRANSFER_OPERATORSHIP)]
-    pub fn transfer_operatorship(ctx: Context<TransferOperatorship>) -> Result<()> {
-        instructions::transfer_operatorship::transfer_operatorship(ctx)
-    }
-
     //
     // Gas-related operations with SPL tokens
     //

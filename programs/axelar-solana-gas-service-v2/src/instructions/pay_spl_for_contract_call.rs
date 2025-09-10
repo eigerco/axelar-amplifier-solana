@@ -1,18 +1,9 @@
-use crate::state::Config;
+use crate::state::Treasury;
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
 use axelar_solana_gas_service_events::events::SplGasPaidForContractCallEvent;
 
 /// Pay gas fees for a contract call using SPL tokens.
-///
-/// Accounts expected:
-/// 0. `[signer, writable]` The account (`sender`) paying the gas fee in SPL tokens.
-/// 1. `[writable]` The sender's associated token account for the mint.
-/// 2. `[writable]` The `config_pda` account.
-/// 3. `[writable]` The config PDA's associated token account for the mint.
-/// 4. `[]` The mint account for the SPL token.
-/// 5. `[]` The SPL token program.
-/// 6+. `[signer, writable]` Optional additional accounts required by the SPL token program for the transfer.
 #[event_cpi]
 #[derive(Accounts)]
 pub struct PaySplForContractCall<'info> {
@@ -29,18 +20,18 @@ pub struct PaySplForContractCall<'info> {
     #[account(
         mut,
         seeds = [
-            Config::SEED_PREFIX,
+            Treasury::SEED_PREFIX,
         ],
-        bump = config_pda.load()?.bump,
+        bump = treasury.bump,
     )]
-    pub config_pda: AccountLoader<'info, Config>,
+    pub treasury: Account<'info, Treasury>,
 
     #[account(
         mut,
         associated_token::mint = mint,
-        associated_token::authority = config_pda,
+        associated_token::authority = treasury,
     )]
-    pub config_pda_ata: InterfaceAccount<'info, TokenAccount>,
+    pub treasury_ata: InterfaceAccount<'info, TokenAccount>,
 
     pub mint: InterfaceAccount<'info, Mint>,
 
@@ -67,7 +58,7 @@ pub fn pay_spl_for_contract_call<'info>(
     let cpi_accounts = TransferChecked {
         mint: ctx.accounts.mint.to_account_info().clone(),
         from: ctx.accounts.sender_ata.to_account_info().clone(),
-        to: ctx.accounts.config_pda_ata.to_account_info().clone(),
+        to: ctx.accounts.treasury_ata.to_account_info().clone(),
         authority: ctx.accounts.sender.to_account_info().clone(),
     };
     let cpi_program = ctx.accounts.token_program.to_account_info();
@@ -77,8 +68,8 @@ pub fn pay_spl_for_contract_call<'info>(
     token_interface::transfer_checked(cpi_context, gas_fee_amount, decimals)?;
 
     emit_cpi!(SplGasPaidForContractCallEvent {
-        config_pda: *ctx.accounts.config_pda.to_account_info().key,
-        config_pda_ata: *ctx.accounts.config_pda_ata.to_account_info().key,
+        config_pda: *ctx.accounts.treasury.to_account_info().key,
+        config_pda_ata: *ctx.accounts.treasury_ata.to_account_info().key,
         mint: *ctx.accounts.mint.to_account_info().key,
         token_program_id: *ctx.accounts.token_program.key,
         destination_chain: destination_chain.clone(),

@@ -1,9 +1,6 @@
 pub mod initialize;
 pub use initialize::*;
 
-pub mod transfer_operatorship;
-pub use transfer_operatorship::*;
-
 //
 // Gas-related operations with native token SOL
 //

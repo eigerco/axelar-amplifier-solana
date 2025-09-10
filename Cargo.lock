@@ -1077,10 +1077,12 @@ dependencies = [
  "axelar-solana-gas-service",
  "axelar-solana-gas-service-events",
  "axelar-solana-gateway-test-fixtures",
+ "axelar-solana-operators",
  "bytemuck",
  "mollusk-svm",
  "program-utils",
  "solana-sdk",
+ "solana-sdk-ids",
 ]
 
 [[package]]

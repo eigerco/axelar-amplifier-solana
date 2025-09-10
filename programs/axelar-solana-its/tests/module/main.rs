@@ -359,6 +359,8 @@ impl ItsTestContext {
             solana_token,
             spl_token_2022::id(),
             0,
+            None,
+            None,
         )
         .unwrap();
 

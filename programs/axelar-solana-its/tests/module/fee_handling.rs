@@ -131,6 +131,8 @@ async fn test_canonical_token_with_fee_lock_unlock(ctx: &mut ItsTestContext) -> 
         canonical_mint,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )?;
 
     let transfer_tx = ctx.send_solana_tx(&[transfer_ix]).await.unwrap();
@@ -272,6 +274,8 @@ async fn test_canonical_token_various_fee_configs(ctx: &mut ItsTestContext) -> a
         canonical_mint,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )?;
 
     let transfer_tx = ctx.send_solana_tx(&[transfer_ix]).await.unwrap();
@@ -410,6 +414,8 @@ async fn test_canonical_token_maximum_fee_cap(ctx: &mut ItsTestContext) -> anyho
         canonical_mint,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )?;
 
     let transfer_tx = ctx.send_solana_tx(&[transfer_ix]).await.unwrap();
@@ -633,6 +639,8 @@ async fn test_custom_token_with_fee_lock_unlock_fee(
         solana_custom_token,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )?;
 
     let outbound_tx = ctx.send_solana_tx(&[transfer_ix]).await.unwrap();

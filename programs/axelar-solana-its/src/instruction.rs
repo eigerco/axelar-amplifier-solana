@@ -199,6 +199,12 @@ pub enum InterchainTokenServiceInstruction {
 
         /// The bump from the call contract signing account PDA derivation
         signing_pda_bump: u8,
+
+        /// Optional program ID for PDA derivation (if wallet is a PDA)
+        pda_program_id: Option<Pubkey>,
+
+        /// Optional seeds for PDA derivation (if wallet is a PDA)
+        pda_seeds: Option<Vec<Vec<u8>>>,
     },
 
     /// Deploys an interchain token.
@@ -421,6 +427,12 @@ pub enum InterchainTokenServiceInstruction {
 
         /// Signing PDA bump
         signing_pda_bump: u8,
+
+        /// Optional program ID for PDA derivation (if wallet is a PDA)
+        pda_program_id: Option<Pubkey>,
+
+        /// Optional seeds for PDA derivation (if wallet is a PDA)
+        pda_seeds: Option<Vec<Vec<u8>>>,
     },
 
     /// Sets the flow limit for an interchain token.
@@ -1360,6 +1372,8 @@ pub fn interchain_transfer(
     mint: Pubkey,
     token_program: Pubkey,
     gas_value: u64,
+    pda_program_id: Option<Pubkey>,
+    pda_seeds: Option<Vec<Vec<u8>>>,
 ) -> Result<Instruction, ProgramError> {
     let (gateway_root_pda, _) = axelar_solana_gateway::get_gateway_root_config_pda();
     let (its_root_pda, _) = crate::find_its_root_pda();
@@ -1396,6 +1410,8 @@ pub fn interchain_transfer(
         amount,
         gas_value,
         signing_pda_bump,
+        pda_program_id,
+        pda_seeds,
     })?;
 
     Ok(Instruction {
@@ -1422,6 +1438,8 @@ pub fn call_contract_with_interchain_token(
     data: Vec<u8>,
     token_program: Pubkey,
     gas_value: u64,
+    pda_program_id: Option<Pubkey>,
+    pda_seeds: Option<Vec<Vec<u8>>>,
 ) -> Result<Instruction, ProgramError> {
     let (its_root_pda, _) = crate::find_its_root_pda();
     let (token_manager_pda, _) = crate::find_token_manager_pda(&its_root_pda, &token_id);
@@ -1458,6 +1476,8 @@ pub fn call_contract_with_interchain_token(
             gas_value,
             signing_pda_bump,
             data,
+            pda_program_id,
+            pda_seeds,
         },
     )?;
 

@@ -117,6 +117,8 @@ async fn test_outbound_message_fails_when_paused(ctx: &mut ItsTestContext) {
         token_address,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )
     .unwrap();
 

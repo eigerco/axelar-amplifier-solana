@@ -177,6 +177,8 @@ async fn test_valid_token_id_mint_matches_token_address(
         solana_token,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )?;
 
     // This should succeed without errors
@@ -279,6 +281,8 @@ async fn test_invalid_token_id_mint_mismatch_rejected(
         solana_token_a, // With mint A (which doesn't match token_id_b's token_manager.token_address)
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )?;
     malicious_transfer_ix.accounts[2].pubkey = token_account_a;
 
@@ -360,6 +364,8 @@ async fn test_lock_unlock_token_id_validation(ctx: &mut ItsTestContext) -> anyho
         worthless_token, // Worthless mint (mismatch!)
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )?;
     malicious_transfer_ix.accounts[2].pubkey = worthless_token_account;
 

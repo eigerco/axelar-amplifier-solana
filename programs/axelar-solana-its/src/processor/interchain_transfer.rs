@@ -259,6 +259,8 @@ pub(crate) fn process_outbound_transfer<'a>(
     gas_value: u64,
     signing_pda_bump: u8,
     data: Option<Vec<u8>>,
+    pda_program_id: Option<Pubkey>,
+    pda_seeds: Option<Vec<Vec<u8>>>,
 ) -> ProgramResult {
     const GMP_ACCOUNTS_IDX: usize = 7;
     let take_token_accounts = TakeTokenAccounts::from_account_info_slice(accounts, &())?;
@@ -294,9 +296,16 @@ pub(crate) fn process_outbound_transfer<'a>(
     let amount_minus_fees = take_token(&take_token_accounts, &token_manager, amount)?;
     amount = amount_minus_fees;
 
+    // Determine the correct source_address based on whether wallet is on-curve or PDA
+    let source_address = determine_source_address(
+        take_token_accounts.wallet,
+        &pda_program_id,
+        &pda_seeds,
+    )?;
+
     let transfer_event = event::InterchainTransfer {
         token_id,
-        source_address: *take_token_accounts.wallet.key,
+        source_address,
         source_token_account: *take_token_accounts.source_ata.key,
         destination_chain,
         destination_address,
@@ -898,5 +907,38 @@ impl<'a> From<&GiveTokenAccounts<'a>> for FlowTrackingAccounts<'a> {
             payer: value.payer,
             token_manager_pda: value.token_manager_pda,
         }
+    }
+}
+
+/// Determines the correct source address for interchain transfers based on whether
+/// the wallet is a user wallet or a PDA (program).
+///
+/// For user wallets: Returns the wallet address directly.
+/// For PDA wallets: Verifies PDA derivation and returns the program ID.
+fn determine_source_address(
+    wallet: &AccountInfo<'_>,
+    pda_program_id: &Option<Pubkey>,
+    pda_seeds: &Option<Vec<Vec<u8>>>,
+) -> Result<Pubkey, ProgramError> {
+    // Check if PDA parameters were provided (indicating this is a PDA case)
+    if let (Some(program_id), Some(seeds)) = (pda_program_id, pda_seeds) {
+        let seed_refs: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
+        let (derived_pda, _bump) = Pubkey::find_program_address(&seed_refs, program_id);
+        
+        if derived_pda != *wallet.key {
+            msg!(
+                "PDA derivation mismatch: expected {}, got {}",
+                wallet.key,
+                derived_pda
+            );
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        // Return the program ID as the source address for PDA case
+        Ok(*program_id)
+    } else {
+        // User wallet case: use wallet address directly
+        // This applies when pda_program_id and pda_seeds are None
+        Ok(*wallet.key)
     }
 }

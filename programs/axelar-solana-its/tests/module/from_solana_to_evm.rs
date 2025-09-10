@@ -513,6 +513,8 @@ async fn transfer_fails_with_wrong_gas_service(ctx: &mut ItsTestContext) -> anyh
         solana_token,
         spl_token_2022::id(),
         1000, // gas_value needs to be greater than 0 for pay_gas to be called
+        None,
+        None,
     )
     .unwrap();
     transfer_ix.accounts[9].pubkey = Pubkey::new_unique(); // invalid gas service
@@ -575,6 +577,8 @@ async fn test_lock_unlock_transfer_fails_with_token_manager_as_authority(
         solana_token,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )
     .unwrap();
     transfer_ix.accounts[2].pubkey = token_manager_ata;
@@ -783,6 +787,8 @@ async fn test_mint_burn_from_interchain_transfer_with_approval(
         solana_token,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )?;
 
     let tx = ctx
@@ -921,6 +927,8 @@ async fn test_ata_must_match_pda_derivation(ctx: &mut ItsTestContext) -> anyhow:
         solana_token,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )
     .unwrap();
 
@@ -998,6 +1006,8 @@ async fn test_source_address_stays_consistent_through_the_transfer(
         interchain_token_mint,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )?;
 
     let tx = ctx.send_solana_tx(&[transfer_ix]).await.unwrap();

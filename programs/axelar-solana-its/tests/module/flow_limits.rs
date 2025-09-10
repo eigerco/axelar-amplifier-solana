@@ -325,6 +325,8 @@ async fn test_outgoing_interchain_transfer_within_limit(
         interchain_token_pda,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )?;
 
     let tx = ctx.send_solana_tx(&[transfer_ix]).await.unwrap();
@@ -391,6 +393,8 @@ async fn test_outgoing_interchain_transfer_outside_limit(ctx: &mut ItsTestContex
         interchain_token_pda,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )
     .unwrap();
 
@@ -573,6 +577,8 @@ async fn test_flow_slot_initialization_outgoing_transfer(
         interchain_token_pda,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )?;
 
     let tx = ctx.send_solana_tx(&[transfer_ix]).await.unwrap();
@@ -611,6 +617,8 @@ async fn test_flow_slot_initialization_outgoing_transfer(
         interchain_token_pda,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )?;
 
     let tx_2 = ctx.send_solana_tx(&[transfer_ix_2]).await.unwrap();
@@ -725,6 +733,8 @@ async fn test_flow_limit_max_u64_no_overflow(ctx: &mut ItsTestContext) -> anyhow
         interchain_token_pda,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )?;
 
     let tx = ctx.send_solana_tx(&[outgoing_transfer_ix]).await.unwrap();
@@ -816,6 +826,8 @@ async fn test_net_flow_calculation_bidirectional(ctx: &mut ItsTestContext) -> an
         interchain_token_pda,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )?;
 
     let tx = ctx.send_solana_tx(&[transfer_ix]).await.unwrap();
@@ -838,6 +850,8 @@ async fn test_net_flow_calculation_bidirectional(ctx: &mut ItsTestContext) -> an
         interchain_token_pda,
         spl_token_2022::id(),
         0,
+        None,
+        None,
     )?;
 
     let tx_2 = ctx.send_solana_tx(&[transfer_ix_2]).await.unwrap();

@@ -866,12 +866,7 @@ pub(crate) fn process_propose_mintership<'a>(accounts: &'a [AccountInfo<'a>]) ->
         proposal_account,
     };
 
-    role_management::processor::propose(
-        &crate::id(),
-        role_management_accounts,
-        Roles::MINTER,
-        Roles::MINTER,
-    )
+    role_management::processor::propose(&crate::id(), role_management_accounts, Roles::MINTER)
 }
 
 pub(crate) fn process_accept_mintership<'a>(accounts: &'a [AccountInfo<'a>]) -> ProgramResult {
@@ -910,10 +905,5 @@ pub(crate) fn process_accept_mintership<'a>(accounts: &'a [AccountInfo<'a>]) -> 
         proposal_account,
     };
 
-    role_management::processor::accept(
-        &crate::id(),
-        role_management_accounts,
-        Roles::MINTER,
-        Roles::empty(),
-    )
+    role_management::processor::accept(&crate::id(), role_management_accounts, Roles::MINTER)
 }

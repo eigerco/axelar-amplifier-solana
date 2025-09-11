@@ -1102,8 +1102,6 @@ async fn test_transfer_with_pda_as_source(
 
     let destination_address = b"0x1234567890123456789012345678901234567890".to_vec();
     
-    // TODO Is it necessary to fund the memo program PDA? Wouldn't the ATA be enough?
-    // Mint some tokens to the memo program's PDA so it has tokens to transfer
     let memo_program_id = axelar_solana_memo_program::id();
     let (memo_counter_pda, _) = axelar_solana_memo_program::get_counter_pda();
     
@@ -1164,29 +1162,17 @@ async fn test_transfer_with_pda_as_source(
     
     match memo_tx_result {
         Ok(memo_tx) => {
-            let memo_logs = &memo_tx.metadata.unwrap().log_messages;
-            
-            // Look for the memo program's log indicating it initiated the transfer
-            let found_memo_initiation = memo_logs.iter().any(|log| {
-                log.contains("Memo program initiating interchain transfer")
+            let memo_logs = &memo_tx.metadata.as_ref().unwrap().log_messages;
+            let found_program_source = memo_logs.iter().any(|log| {
+                log.contains(&memo_program_id.to_string())
             });
             
-            if found_memo_initiation {
-                println!("✓ Memo program successfully initiated PDA transfer");
-                
-                // Look for evidence that the source address is the memo program ID
-                let found_program_source = memo_logs.iter().any(|log| {
-                    log.contains(&memo_program_id.to_string())
-                });
-                
-                if found_program_source {
-                    println!("✓ Source address correctly attributed to memo program: {}", memo_program_id);
-                } else {
-                    println!("! Source address attribution not found in logs (may be encoded in binary data)");
-                }
-            } else {
-                println!("! Memo program transfer initiation log not found");
-            }
+            assert!(found_program_source, "Source address attribution not found in plain text logs");
+            
+            axelar_solana_gateway_test_fixtures::assert_msg_present_in_logs(
+                memo_tx,
+                "Memo program initiating interchain transfer"
+            );
         },
         Err(e) => {
             // The transaction may fail due to missing accounts or other setup issues

@@ -350,16 +350,14 @@ fn give_token(
 
 fn track_token_flow(
     accounts: &FlowTrackingAccounts<'_>,
-    flow_limit: u64,
     amount: u64,
     direction: FlowDirection,
 ) -> ProgramResult {
-    if flow_limit == 0 {
-        return Ok(());
-    }
-
     let mut token_manager = TokenManager::load(accounts.token_manager_pda)?;
 
+    if token_manager.flow_slot.flow_limit == 0 {
+        return Ok(());
+    }
     // Reset the flow slot upon epoch change.
     let current_epoch = crate::state::flow_limit::current_flow_epoch()?;
     if token_manager.flow_slot.epoch != current_epoch {
@@ -369,9 +367,7 @@ fn track_token_flow(
         token_manager.flow_slot.epoch = current_epoch;
     }
 
-    token_manager
-        .flow_slot
-        .add_flow(flow_limit, amount, direction)?;
+    token_manager.flow_slot.add_flow(amount, direction)?;
     token_manager.store(
         accounts.payer,
         accounts.token_manager_pda,
@@ -390,12 +386,7 @@ fn handle_give_token_transfer(
         LockUnlock, LockUnlockFee, MintBurn, MintBurnFrom, NativeInterchainToken,
     };
 
-    track_token_flow(
-        &accounts.into(),
-        token_manager.flow_slot.flow_limit,
-        amount,
-        FlowDirection::In,
-    )?;
+    track_token_flow(&accounts.into(), amount, FlowDirection::In)?;
     let token_id = token_manager.token_id;
     let token_manager_pda_bump = token_manager.bump;
 
@@ -454,12 +445,7 @@ fn handle_take_token_transfer(
         LockUnlock, LockUnlockFee, MintBurn, MintBurnFrom, NativeInterchainToken,
     };
 
-    track_token_flow(
-        &accounts.into(),
-        token_manager.flow_slot.flow_limit,
-        amount,
-        FlowDirection::Out,
-    )?;
+    track_token_flow(&accounts.into(), amount, FlowDirection::Out)?;
 
     let transferred = match token_manager.ty {
         NativeInterchainToken | MintBurn | MintBurnFrom => {

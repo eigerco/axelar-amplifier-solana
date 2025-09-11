@@ -52,6 +52,37 @@ pub enum AxelarMemoInstruction {
         /// Destination contract address on the destination chain
         destination_address: String,
     },
+
+    /// Send an interchain token transfer from the memo program's PDA
+    ///
+    /// This instruction allows the memo program to initiate token transfers
+    /// using its own PDA as the source, demonstrating PDA-based transfers.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    /// 0. [w] counter PDA (memo program's main PDA)
+    /// 1. [s] payer account
+    /// 2. [] token_id for the interchain token
+    /// 3. [] destination address bytes
+    /// 4. [] amount to transfer
+    /// 5. [] destination chain name
+    /// Additional accounts required by ITS program...
+    SendInterchainTransfer {
+        /// Token ID to transfer
+        token_id: [u8; 32],
+        /// Destination chain name
+        destination_chain: String,
+        /// Destination address on the target chain
+        destination_address: Vec<u8>,
+        /// Amount to transfer
+        amount: u64,
+        /// Token mint address
+        mint: Pubkey,
+        /// Token program ID
+        token_program: Pubkey,
+        /// Gas value for cross-chain transaction
+        gas_value: u128,
+    },
 }
 
 /// Creates a [`AxelarMemoInstruction::Initialize`] instruction.

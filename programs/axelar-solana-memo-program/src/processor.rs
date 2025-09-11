@@ -169,6 +169,28 @@ pub fn process_native_ix(
             msg!("Instruction: Process Memo");
             process_memo(program_id, accounts, &memo)?
         }
+        AxelarMemoInstruction::SendInterchainTransfer {
+            token_id,
+            destination_chain,
+            destination_address,
+            amount,
+            mint,
+            token_program,
+            gas_value,
+        } => {
+            msg!("Instruction: SendInterchainTransfer");
+            process_send_interchain_transfer(
+                program_id,
+                accounts,
+                token_id,
+                destination_chain,
+                destination_address,
+                amount,
+                mint,
+                token_program,
+                gas_value,
+            )?
+        }
     }
 
     Ok(())
@@ -245,4 +267,55 @@ pub fn process_initialize_memo_program_counter(
         counter,
         &[&[bump]],
     )
+}
+
+/// Process the SendInterchainTransfer instruction
+/// This function makes a CPI call to the ITS program to initiate an interchain transfer
+/// using the memo program's PDA as the source
+pub fn process_send_interchain_transfer(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo<'_>],
+    token_id: [u8; 32],
+    destination_chain: String,
+    destination_address: Vec<u8>,
+    amount: u64,
+    mint: Pubkey,
+    token_program: Pubkey,
+    gas_value: u128,
+) -> ProgramResult {
+    let accounts_iter = &mut accounts.iter();
+    let counter_pda = next_account_info(accounts_iter)?;
+    let payer = next_account_info(accounts_iter)?;
+    
+    // Validate that the counter PDA is properly initialized
+    let counter_account = counter_pda.check_initialized_pda::<Counter>(program_id)?;
+    assert_counter_pda_seeds(&counter_account, counter_pda.key);
+    
+    // Create the interchain transfer instruction with PDA parameters
+    let transfer_ix = axelar_solana_its::instruction::interchain_transfer(
+        *payer.key,                    // Payer (pays fees)
+        *counter_pda.key,              // Source account (the memo program's PDA)
+        token_id,                      // Token ID
+        destination_chain.clone(),     // Destination chain
+        destination_address,           // Destination address
+        amount,                        // Amount to transfer
+        mint,                          // Token mint
+        token_program,                 // Token program
+        gas_value.try_into().map_err(|_| ProgramError::InvalidInstructionData)?, // Gas value
+        Some(*program_id),             // PDA program ID (memo program)
+        Some(vec![vec![]]),            // PDA seeds (empty for counter PDA)
+    )?;
+    
+    msg!("Memo program initiating interchain transfer from PDA: {}", counter_pda.key);
+    msg!("Transfer amount: {}, destination: {}", amount, destination_chain);
+    
+    // Make the CPI call with PDA signing
+    invoke_signed(
+        &transfer_ix,
+        accounts, // Pass all accounts to the CPI call
+        &[&[&[counter_account.bump]]], // Sign with the counter PDA's bump
+    )?;
+    
+    msg!("Interchain transfer initiated successfully");
+    Ok(())
 }

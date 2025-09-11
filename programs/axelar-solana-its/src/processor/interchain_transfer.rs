@@ -260,7 +260,7 @@ pub(crate) fn process_outbound_transfer<'a>(
     signing_pda_bump: u8,
     data: Option<Vec<u8>>,
 ) -> ProgramResult {
-    const GMP_ACCOUNTS_IDX: usize = 7;
+    const GMP_ACCOUNTS_IDX: usize = 6;
     let take_token_accounts = TakeTokenAccounts::from_account_info_slice(accounts, &())?;
     let (_other, outbound_message_accounts) = accounts.split_at(GMP_ACCOUNTS_IDX);
     let gmp_accounts = GmpAccounts::from_account_info_slice(outbound_message_accounts, &())?;
@@ -296,7 +296,7 @@ pub(crate) fn process_outbound_transfer<'a>(
 
     let transfer_event = event::InterchainTransfer {
         token_id,
-        source_address: *take_token_accounts.wallet.key,
+        source_address: *take_token_accounts.payer.key,
         source_token_account: *take_token_accounts.source_ata.key,
         destination_chain,
         destination_address,
@@ -571,7 +571,7 @@ fn create_take_token_transfer_info<'a, 'b>(
         token_program: accounts.token_program,
         token_mint: accounts.token_mint,
         destination: accounts.token_manager_ata,
-        authority: accounts.wallet,
+        authority: accounts.payer,
         source: accounts.source_ata,
         signers_seeds,
         amount,
@@ -730,7 +730,6 @@ fn transfer_with_fee_to(info: &TransferInfo<'_, '_>) -> ProgramResult {
 #[derive(Debug)]
 pub(crate) struct TakeTokenAccounts<'a> {
     pub(crate) payer: &'a AccountInfo<'a>,
-    pub(crate) wallet: &'a AccountInfo<'a>,
     pub(crate) source_ata: &'a AccountInfo<'a>,
     pub(crate) token_mint: &'a AccountInfo<'a>,
     pub(crate) token_manager_pda: &'a AccountInfo<'a>,
@@ -757,7 +756,6 @@ impl<'a> FromAccountInfoSlice<'a> for TakeTokenAccounts<'a> {
 
         Ok(TakeTokenAccounts {
             payer: next_account_info(accounts_iter)?,
-            wallet: next_account_info(accounts_iter)?,
             source_ata: next_account_info(accounts_iter)?,
             token_mint: next_account_info(accounts_iter)?,
             token_manager_pda: next_account_info(accounts_iter)?,

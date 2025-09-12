@@ -355,9 +355,10 @@ fn track_token_flow(
 ) -> ProgramResult {
     let mut token_manager = TokenManager::load(accounts.token_manager_pda)?;
 
-    if token_manager.flow_slot.flow_limit == 0 {
+    if token_manager.flow_slot.flow_limit.is_none() {
         return Ok(());
     }
+
     // Reset the flow slot upon epoch change.
     let current_epoch = crate::state::flow_limit::current_flow_epoch()?;
     if token_manager.flow_slot.epoch != current_epoch {

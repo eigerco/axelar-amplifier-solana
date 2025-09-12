@@ -1106,22 +1106,9 @@ async fn test_transfer_with_pda_as_source(
     let (memo_counter_pda, _) = axelar_solana_memo_program::get_counter_pda();
     
     // Create ATA for the memo program's PDA
-    let memo_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
-        &memo_counter_pda,
-        &interchain_token_mint,
-        &spl_token_2022::id(),
-    );
-    
     let create_memo_ata_ix = spl_associated_token_account::instruction::create_associated_token_account(
         &ctx.solana_wallet,
         &memo_counter_pda,
-        &interchain_token_mint,
-        &spl_token_2022::id(),
-    );
-    
-    // Get the payer ATA address (will be created by ITS when needed)
-    let payer_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
-        &ctx.solana_wallet,
         &interchain_token_mint,
         &spl_token_2022::id(),
     );
@@ -1152,6 +1139,11 @@ async fn test_transfer_with_pda_as_source(
     
     // Create the full memo program instruction with all required accounts
     // The memo program needs to pass all ITS accounts for the CPI call to succeed
+    let payer_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
+        &ctx.solana_wallet,
+        &interchain_token_mint,
+        &spl_token_2022::id(),
+    );
     let (gateway_root_pda, _) = axelar_solana_gateway::get_gateway_root_config_pda();
     let (its_root_pda, _) = axelar_solana_its::find_its_root_pda();
     let (token_manager_pda, _) = axelar_solana_its::find_token_manager_pda(&its_root_pda, &token_id);

@@ -763,7 +763,7 @@ fn burn<'a>(
             token_mint.clone(),
             authority.clone(),
         ],
-        &[signer_seeds], // invoke_signed expects &[&[&[u8]]]
+        &[signer_seeds],
     )?;
     Ok(())
 }

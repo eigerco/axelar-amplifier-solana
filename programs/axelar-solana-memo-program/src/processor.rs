@@ -270,8 +270,25 @@ pub fn process_initialize_memo_program_counter(
 }
 
 /// Process the SendInterchainTransfer instruction
-/// This function transfers tokens from the memo program's PDA to the payer and then
-/// makes a CPI call to the ITS program to initiate the interchain transfer
+/// 
+/// This function demonstrates PDA-based interchain token transfers by:
+/// 1. Validating inputs and PDA state
+/// 2. Transferring tokens from the memo program's PDA to the payer
+/// 3. Making a CPI call to ITS to initiate the interchain transfer
+/// 
+/// # Arguments
+/// * `program_id` - The memo program ID
+/// * `accounts` - Account context including PDAs, ATAs, and ITS accounts
+/// * `token_id` - The interchain token ID to transfer
+/// * `destination_chain` - Target blockchain name
+/// * `destination_address` - Recipient address on target chain
+/// * `amount` - Token amount to transfer (must be > 0)
+/// * `mint` - Token mint address
+/// * `token_program` - SPL Token program ID
+/// * `gas_value` - Gas fee for cross-chain transaction
+/// 
+/// # Errors
+/// Returns `ProgramError::InvalidInstructionData` for invalid inputs
 pub fn process_send_interchain_transfer(
     program_id: &Pubkey,
     accounts: &[AccountInfo<'_>],
@@ -286,6 +303,16 @@ pub fn process_send_interchain_transfer(
     let accounts_iter = &mut accounts.iter();
     let counter_pda = next_account_info(accounts_iter)?;
     let payer = next_account_info(accounts_iter)?;
+    
+    if amount == 0 {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+    if destination_chain.is_empty() {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+    if destination_address.is_empty() {
+        return Err(ProgramError::InvalidInstructionData);
+    }
     
     // Validate that the counter PDA is properly initialized
     let counter_account = counter_pda.check_initialized_pda::<Counter>(program_id)?;
@@ -315,6 +342,16 @@ pub fn process_send_interchain_transfer(
         .find(|acc| acc.key == &payer_ata)
         .ok_or(ProgramError::InvalidAccountData)?;
     
+    let mint_account = accounts[2..].iter()
+        .find(|acc| acc.key == &mint)
+        .ok_or(ProgramError::InvalidAccountData)?;
+    
+    let decimals = {
+        let mint_data = mint_account.try_borrow_data()?;
+        let mint_state = spl_token_2022::state::Mint::unpack(&mint_data)?;
+        mint_state.decimals
+    };
+    
     // Create and execute transfer instruction
     let transfer_ix = spl_token_2022::instruction::transfer_checked(
         &token_program,
@@ -324,14 +361,14 @@ pub fn process_send_interchain_transfer(
         counter_pda.key,
         &[],
         amount,
-        9, // decimals - assuming 9 for test token
+        decimals,
     )?;
     
     invoke_signed(
         &transfer_ix,
         &[
             source_ata_account.clone(),
-            accounts[2..].iter().find(|acc| acc.key == &mint).unwrap().clone(),
+            mint_account.clone(),
             dest_ata_account.clone(),
             counter_pda.clone(),
         ],

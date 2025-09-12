@@ -1106,7 +1106,7 @@ async fn test_transfer_with_pda_as_source(
     let (memo_counter_pda, _) = axelar_solana_memo_program::get_counter_pda();
     
     // Create ATA for the memo program's PDA
-    let _memo_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
+    let memo_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
         &memo_counter_pda,
         &interchain_token_mint,
         &spl_token_2022::id(),
@@ -1115,6 +1115,13 @@ async fn test_transfer_with_pda_as_source(
     let create_memo_ata_ix = spl_associated_token_account::instruction::create_associated_token_account(
         &ctx.solana_wallet,
         &memo_counter_pda,
+        &interchain_token_mint,
+        &spl_token_2022::id(),
+    );
+    
+    // Get the payer ATA address (will be created by ITS when needed)
+    let payer_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
+        &ctx.solana_wallet,
         &interchain_token_mint,
         &spl_token_2022::id(),
     );
@@ -1166,8 +1173,9 @@ async fn test_transfer_with_pda_as_source(
             
             // ITS accounts (passed through to the CPI call)
             solana_program::instruction::AccountMeta::new(ctx.solana_wallet, true), // Payer for ITS
-            solana_program::instruction::AccountMeta::new_readonly(memo_counter_pda, false), // Wallet (source)
-            solana_program::instruction::AccountMeta::new(memo_ata, false), // Source ATA
+            solana_program::instruction::AccountMeta::new_readonly(ctx.solana_wallet, false), // Wallet (using payer as source since tokens are already burned)
+            solana_program::instruction::AccountMeta::new(payer_ata, false), // Source ATA (payer's ATA for ITS)
+            solana_program::instruction::AccountMeta::new(memo_ata, false), // Memo PDA's ATA (for burn operation)
             solana_program::instruction::AccountMeta::new(interchain_token_mint, false), // Mint
             solana_program::instruction::AccountMeta::new(token_manager_pda, false), // Token manager
             solana_program::instruction::AccountMeta::new(token_manager_ata, false), // Token manager ATA

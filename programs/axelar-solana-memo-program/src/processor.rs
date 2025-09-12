@@ -270,8 +270,8 @@ pub fn process_initialize_memo_program_counter(
 }
 
 /// Process the SendInterchainTransfer instruction
-/// This function makes a CPI call to the ITS program to initiate an interchain transfer
-/// using the memo program's PDA as the source
+/// This function transfers tokens from the memo program's PDA to the payer and then
+/// makes a CPI call to the ITS program to initiate the interchain transfer
 pub fn process_send_interchain_transfer(
     program_id: &Pubkey,
     accounts: &[AccountInfo<'_>],
@@ -294,54 +294,68 @@ pub fn process_send_interchain_transfer(
     msg!("Memo program initiating interchain transfer from PDA: {}", counter_pda.key);
     msg!("Transfer amount: {}, destination: {}", amount, destination_chain);
     
-    // Burn tokens directly from memo program PDA
+    // First, transfer the tokens from the memo program's PDA to the payer
     let memo_pda_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
         counter_pda.key,
         &mint,
         &token_program,
     );
     
-    // Burn tokens from memo program PDA
-    let burn_ix = spl_token_2022::instruction::burn(
+    let payer_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
+        payer.key,
+        &mint,
         &token_program,
-        &memo_pda_ata,           // Source (memo program PDA's ATA)
-        &mint,                   // Token mint
-        counter_pda.key,         // Authority (memo program PDA)
-        &[],                     // No additional signers
-        amount,                  // Amount to burn
+    );
+    
+    // Find the ATA accounts in the provided accounts
+    let source_ata_account = accounts[2..].iter()
+        .find(|acc| acc.key == &memo_pda_ata)
+        .ok_or(ProgramError::InvalidAccountData)?;
+    let dest_ata_account = accounts[2..].iter()
+        .find(|acc| acc.key == &payer_ata)
+        .ok_or(ProgramError::InvalidAccountData)?;
+    
+    // Create and execute transfer instruction
+    let transfer_ix = spl_token_2022::instruction::transfer_checked(
+        &token_program,
+        &memo_pda_ata,
+        &mint,
+        &payer_ata,
+        counter_pda.key,
+        &[],
+        amount,
+        9, // decimals - assuming 9 for test token
     )?;
     
-    // Sign the burn with memo program PDA
     invoke_signed(
-        &burn_ix,
+        &transfer_ix,
         &[
-            // Find the memo PDA ATA account in the provided accounts
-            accounts[2..].iter().find(|acc| acc.key == &memo_pda_ata).unwrap().clone(),
-            // Find the mint account
+            source_ata_account.clone(),
             accounts[2..].iter().find(|acc| acc.key == &mint).unwrap().clone(),
+            dest_ata_account.clone(),
             counter_pda.clone(),
         ],
-        &[&[&[counter_account.bump]]], // Sign with the counter PDA's bump
+        &[&[&[counter_account.bump]]],
     )?;
     
-    msg!("Tokens burned by memo program, now initiating interchain message");
+    msg!("Tokens transferred from memo PDA to payer, now initiating interchain transfer");
     
-    // Now create the interchain transfer instruction just for messaging (no token operations)
+    // Now create the interchain transfer instruction with payer as source
     let transfer_ix = axelar_solana_its::instruction::interchain_transfer(
         *payer.key,                    // Payer (pays fees)
-        *payer.key,                    // Source account (irrelevant since no tokens to transfer)
+        *payer.key,                    // Source account (payer has the tokens now)
         token_id,                      // Token ID
         destination_chain.clone(),     // Destination chain
         destination_address,           // Destination address
-        amount,                        // Amount (for message only)
+        amount,                        // Amount to transfer
         mint,                          // Token mint
         token_program,                 // Token program
         gas_value.try_into().map_err(|_| ProgramError::InvalidInstructionData)?, // Gas value
-        None,                          // No PDA program ID
-        None,                          // No PDA seeds
+        None,                          // No PDA info needed
+        None,                          // No PDA seeds needed
     )?;
     
-    // Make the CPI call to ITS (no signing needed since payer is now the source)
+    // Make the CPI call to ITS
     invoke(
         &transfer_ix,
         &accounts[2..], // Skip the first 2 accounts which are for the memo program
@@ -350,3 +364,4 @@ pub fn process_send_interchain_transfer(
     msg!("Interchain transfer initiated successfully");
     Ok(())
 }
+

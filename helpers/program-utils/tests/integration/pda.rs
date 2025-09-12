@@ -2,9 +2,11 @@ use axelar_solana_gateway_test_fixtures::base::FindLog;
 use axelar_solana_gateway_test_fixtures::{
     SolanaAxelarIntegration, SolanaAxelarIntegrationMetadata,
 };
+use dummy_axelar_solana_gateway::processor::PDAData;
 use solana_program_test::tokio;
+use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
-use solana_sdk::system_instruction;
+use solana_sdk::{system_instruction, system_program};
 
 // Test a solana account cannot be initialized if already has lamports (exploratory test)
 #[tokio::test]
@@ -46,6 +48,53 @@ async fn test_can_create_pda_with_previous_lamports_using_enhanced_function() {
         .fixture
         .send_tx(&[transfer_lamports_ix, create_pda_ix])
         .await.expect("We expect the init_pda_v2 function to handle the case when the PDA account already has lamports");
+}
+
+#[tokio::test]
+async fn test_can_store_pda_info_with_data_at_payer() {
+    let mut program_test = program_test().await;
+
+    // Create and fund a tx payer
+    let new_payer = Keypair::new();
+    program_test
+        .fixture
+        .fund_account(&new_payer.pubkey(), 2_000_000_000)
+        .await;
+
+    // Store data at the payer for store (not the same as tx payer)
+    let payer_pubkey = program_test.fixture.payer.pubkey();
+    let mut payer_acc = program_test
+        .get_account(&payer_pubkey, &system_program::id())
+        .await;
+    payer_acc.data = vec![1]; // add data to payer
+    program_test.set_account_state(&payer_pubkey, payer_acc);
+
+    // Ask the dummy program to generate a new PDA account
+    let (create_pda_ix, (key, _)) = dummy_axelar_solana_gateway::instructions::store_pda(
+        &program_test.fixture.payer.pubkey(),
+        PDAData {
+            data: vec![1, 2, 3],
+        },
+    );
+
+    // We transfer lamports to the PDA account so it should avoid calling transfer for rent exemption.
+    let transfer_lamports_ix =
+        system_instruction::transfer(&new_payer.pubkey(), &key, 1_000_000_000);
+
+    // Execute both instructions in a single transaction. It should pass even if the payer PDA account has data.
+    // The payer of the transaction has nothing to do with the PDA account having data.
+    program_test
+        .fixture
+        .send_tx_with_custom(
+            &new_payer.pubkey(),
+            &[transfer_lamports_ix, create_pda_ix],
+            &[
+                program_test.fixture.payer.insecure_clone(),
+                new_payer.insecure_clone(),
+            ],
+        )
+        .await
+        .unwrap();
 }
 
 async fn program_test() -> SolanaAxelarIntegrationMetadata {

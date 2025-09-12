@@ -61,21 +61,24 @@ fn prepare_account_structure<'a, 'b>(
     };
 
     // Create the instructions to transfer funds, allocate space, and assign the program ID
-    let transfer_ix =
-        &system_instruction::transfer(funder_info.key, to_create.key, required_funds_for_rent);
     let alloc_ix = &system_instruction::allocate(to_create.key, space);
     let assign_ix = &system_instruction::assign(to_create.key, program_id);
 
     // Invoke the instructions to transfer funds, allocate space, and assign the program ID
-    invoke_signed(
-        transfer_ix,
-        &[
-            funder_info.clone(),
-            to_create.clone(),
-            system_program_info.clone(),
-        ],
-        &[signer_seeds],
-    )?;
+    if required_funds_for_rent > 0 {
+        let transfer_ix =
+            &system_instruction::transfer(funder_info.key, to_create.key, required_funds_for_rent);
+        invoke_signed(
+            transfer_ix,
+            &[
+                funder_info.clone(),
+                to_create.clone(),
+                system_program_info.clone(),
+            ],
+            &[signer_seeds],
+        )?;
+    }
+
     invoke_signed(
         alloc_ix,
         &[
@@ -287,10 +290,12 @@ where
             let lamports_needed = Rent::get()?.minimum_balance(serialized_data.len());
             let lamports_diff = lamports_needed.saturating_sub(destination.lamports());
 
-            invoke(
-                &system_instruction::transfer(payer.key, destination.key, lamports_diff),
-                &[payer.clone(), destination.clone(), system_program.clone()],
-            )?;
+            if lamports_diff != 0 {
+                invoke(
+                    &system_instruction::transfer(payer.key, destination.key, lamports_diff),
+                    &[payer.clone(), destination.clone(), system_program.clone()],
+                )?;
+            }
         }
 
         destination.realloc(serialized_data.len(), false)?;

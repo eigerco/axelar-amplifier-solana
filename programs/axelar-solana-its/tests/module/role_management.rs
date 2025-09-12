@@ -1,9 +1,9 @@
 use borsh::BorshDeserialize;
 use solana_program::instruction::AccountMeta;
 use solana_program_test::tokio;
-use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
 use solana_sdk::system_instruction;
+use solana_sdk::{signature::Keypair, system_program};
 use spl_associated_token_account::{
     get_associated_token_address_with_program_id, instruction::create_associated_token_account,
 };
@@ -89,6 +89,68 @@ async fn test_fail_transfer_when_not_holder(ctx: &mut ItsTestContext) {
     assert!(tx_metadata
         .find_log("User roles account not found")
         .is_some());
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_successful_proposal_acceptance_even_with_data_at_payer(ctx: &mut ItsTestContext) {
+    let (its_root_pda, _) = axelar_solana_its::find_its_root_pda();
+
+    // The payer of the transaction. Needs to be different than the wallet that has the role.
+    let payer = Keypair::new();
+
+    // Let's transfer some lamports to the payer so it can pay for the transaction fees.
+    ctx.send_solana_tx(&[system_instruction::transfer(
+        &ctx.solana_chain.fixture.payer.pubkey(),
+        &payer.pubkey(),
+        u32::MAX.into(),
+    )])
+    .await
+    .unwrap();
+
+    let bob = Keypair::new();
+
+    // Now we need to pay proposal PDA, as we don't want the processor to invoke "transfer" for covering rent exemption.
+    let (proposal_pda, _) = role_management::find_roles_proposal_pda(
+        &axelar_solana_its::id(),
+        &its_root_pda,
+        &ctx.solana_wallet,
+        &bob.pubkey(),
+    );
+    ctx.send_solana_tx(&[system_instruction::transfer(
+        &ctx.solana_chain.fixture.payer.pubkey(),
+        &proposal_pda,
+        200_000_000,
+    )])
+    .await
+    .unwrap();
+
+    // Now write some data to the payer account, which is the one that has the role and is proposing the transfer.
+    let mut account_info = ctx
+        .solana_chain
+        .get_account(&ctx.solana_wallet, &system_program::ID)
+        .await;
+    account_info.data = vec![1]; // We just want to test it has some data.
+    ctx.solana_chain
+        .fixture
+        .set_account_state(&ctx.solana_wallet, account_info);
+
+    // Send the instructions to propose the transfer pre-payment + proposal
+    // let roles_to_transfer = Roles::OPERATOR;
+    let proposal_ix =
+        axelar_solana_its::instruction::propose_operatorship(ctx.solana_wallet, bob.pubkey())
+            .unwrap();
+
+    ctx.send_solana_tx_with(
+        &payer,
+        &[proposal_ix],
+        &[
+            payer.insecure_clone(),
+            ctx.solana_chain.payer.insecure_clone(), // This 2 payers are different. One is the payer of the tx, the other is the wallet that has the role.
+        ],
+    )
+    .await
+    .unwrap();
 }
 
 #[test_context(ItsTestContext)]

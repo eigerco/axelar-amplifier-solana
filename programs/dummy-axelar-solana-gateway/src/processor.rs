@@ -4,7 +4,7 @@ use std::any::type_name;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use core::mem::size_of;
-use program_utils::pda::init_pda;
+use program_utils::pda::{init_pda, BorshPda};
 use solana_program::account_info::{next_account_info, AccountInfo};
 use solana_program::entrypoint::ProgramResult;
 use solana_program::program::invoke_signed;
@@ -77,13 +77,42 @@ impl Processor {
                     &[seed_prefixes::A_PDA, &[bump]],
                 )
             }
+            DummyGatewayInstruction::StorePDA { mut data, bump } => {
+                msg!("Storing PDA with data length: {}", data.data.len());
+
+                let accounts_iter = &mut accounts.iter();
+
+                let payer = next_account_info(accounts_iter)?;
+                let a_pda = next_account_info(accounts_iter)?;
+                let system_account = next_account_info(accounts_iter)?;
+
+                data.init(
+                    &crate::id(),
+                    system_account,
+                    payer,
+                    a_pda,
+                    &[seed_prefixes::A_PDA, &[bump]],
+                )?;
+
+                data.data = vec![1_u8; 10]; // Modify the data before storing
+
+                data.store(payer, a_pda, system_account)
+            }
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, BorshSerialize, BorshDeserialize)]
-struct PDASampleData {
-    number: u64,
+#[derive(Debug, Clone, PartialEq, BorshSerialize, BorshDeserialize, Eq)]
+pub struct PDAData {
+    pub data: Vec<u8>,
+}
+impl BorshPda for PDAData {}
+
+impl Sealed for PDAData {}
+
+#[derive(Debug, Clone, PartialEq, BorshSerialize, BorshDeserialize, Eq)]
+pub struct PDASampleData {
+    pub number: u64,
 }
 
 impl Sealed for PDASampleData {}

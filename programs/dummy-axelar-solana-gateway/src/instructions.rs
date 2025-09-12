@@ -9,7 +9,7 @@ use solana_program::{
     system_program,
 };
 
-use crate::seed_prefixes;
+use crate::{processor::PDAData, seed_prefixes};
 
 /// Instructions supported by the gateway program.
 #[repr(u8)]
@@ -24,6 +24,10 @@ pub enum DummyGatewayInstruction {
         bump: u8,
     },
     PDACreation {
+        bump: u8,
+    },
+    StorePDA {
+        data: PDAData,
         bump: u8,
     },
 }
@@ -66,6 +70,22 @@ pub fn create_pda(payer: &Pubkey) -> (Instruction, (Pubkey, u8)) {
                 AccountMeta::new_readonly(system_program::id(), false),
             ],
             data: to_vec(&DummyGatewayInstruction::PDACreation { bump }).unwrap(),
+        },
+        (key, bump),
+    )
+}
+
+pub fn store_pda(payer: &Pubkey, data: PDAData) -> (Instruction, (Pubkey, u8)) {
+    let (key, bump) = Pubkey::find_program_address(&[seed_prefixes::A_PDA], &crate::id());
+    (
+        Instruction {
+            program_id: crate::id(),
+            accounts: vec![
+                AccountMeta::new_readonly(*payer, true),
+                AccountMeta::new(key, false),
+                AccountMeta::new_readonly(system_program::id(), false),
+            ],
+            data: to_vec(&DummyGatewayInstruction::StorePDA { data, bump }).unwrap(),
         },
         (key, bump),
     )

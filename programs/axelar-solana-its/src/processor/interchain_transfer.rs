@@ -535,44 +535,29 @@ fn handle_take_token_transfer(
 
     let transferred = match token_manager.ty {
         NativeInterchainToken | MintBurn | MintBurnFrom => {
-            if let (Some(program_id), Some(seeds)) = (pda_program_id, pda_seeds) {
-                // PDA case: validate derivation and burn with PDA authority
-                let seed_refs: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
-                let (derived_pda, bump) = Pubkey::find_program_address(&seed_refs, program_id);
-                
-                
-                if derived_pda != *accounts.wallet.key {
-                    msg!(
-                        "PDA derivation failed: expected {}, got {}",
-                        derived_pda,
-                        accounts.wallet.key
-                    );
-                    return Err(ProgramError::InvalidAccountData);
-                }
-                
-                // Build signer seeds with bump for invoke_signed
-                // The signer seeds must match exactly how the PDA was originally derived
+            if let Some((seed_refs, bump)) = validate_pda_and_get_bump(pda_program_id, pda_seeds, accounts.wallet.key)? {
+                // PDA case: burn with PDA authority using validated seeds and bump
                 let bump_bytes = [bump];
                 
+                // Build signer seeds with bump for invoke_signed
                 // For PDAs derived with no seeds: find_program_address(&[], program_id)
                 // For PDA created with empty seeds, we need to sign with just the bump
-                let signer_seed_slices: Vec<&[u8]> = if seeds.is_empty() {
+                let signer_seed_slices: Vec<&[u8]> = if seed_refs.is_empty() {
                     vec![&bump_bytes] // Just the bump byte
                 } else {
                     // Normal case: original seeds + bump
-                    let mut all_seeds: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
+                    let mut all_seeds = seed_refs;
                     all_seeds.push(&bump_bytes);
                     all_seeds
                 };
                 
-                // Pass the correctly constructed signer seeds
                 burn(
                     accounts.wallet, // Use PDA as authority
                     accounts.token_program,
                     accounts.token_mint,
                     accounts.source_ata,
                     amount,
-                    &signer_seed_slices, // Use the correctly built seed structure
+                    &signer_seed_slices,
                 )?;
             } else {
                 // Regular user wallet case
@@ -642,6 +627,33 @@ fn determine_pda_signer_seeds<'a>(
         Ok(seed_refs)
     } else {
         Ok(vec![])
+    }
+}
+
+/// Helper function to validate PDA and return seed refs and bump for invoke_signed
+/// Returns (seed_refs, bump) - caller constructs signer seeds from these
+fn validate_pda_and_get_bump<'a>(
+    pda_program_id: &Option<Pubkey>,
+    pda_seeds: &'a Option<Vec<Vec<u8>>>,
+    wallet_key: &Pubkey,
+) -> Result<Option<(Vec<&'a [u8]>, u8)>, ProgramError> {
+    if let (Some(program_id), Some(seeds)) = (pda_program_id, pda_seeds) {
+        // Validate PDA derivation
+        let seed_refs: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
+        let (derived_pda, bump) = Pubkey::find_program_address(&seed_refs, program_id);
+        
+        if derived_pda != *wallet_key {
+            msg!(
+                "PDA derivation failed: expected {}, got {}",
+                derived_pda,
+                wallet_key
+            );
+            return Err(ProgramError::InvalidAccountData);
+        }
+        
+        Ok(Some((seed_refs, bump)))
+    } else {
+        Ok(None)
     }
 }
 

@@ -540,18 +540,6 @@ fn handle_take_token_transfer(
                 let seed_refs: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
                 let (derived_pda, bump) = Pubkey::find_program_address(&seed_refs, program_id);
                 
-                msg!("PDA validation: program_id={}, seeds_len={}", program_id, seeds.len());
-                msg!("Expected memo program ID: {}", "memPJFxP6H6bjEKpUSJ4KC7C4dKAfNE3xWrTpJBKDwN");
-                for (i, seed) in seeds.iter().enumerate() {
-                    msg!("Seed {}: len={}", i, seed.len());
-                }
-                msg!("Derived PDA: {}, calculated bump: {}", derived_pda, bump);
-                
-                // Test if we can create program address with the calculated bump
-                match solana_program::pubkey::Pubkey::create_program_address(&[&[bump]], program_id) {
-                    Ok(addr) => msg!("✓ create_program_address with bump {} succeeded: {}", bump, addr),
-                    Err(e) => msg!("✗ create_program_address with bump {} failed: {:?}", bump, e),
-                }
                 
                 if derived_pda != *accounts.wallet.key {
                     msg!(
@@ -569,26 +557,13 @@ fn handle_take_token_transfer(
                 // For PDAs derived with no seeds: find_program_address(&[], program_id)
                 // For PDA created with empty seeds, we need to sign with just the bump
                 let signer_seed_slices: Vec<&[u8]> = if seeds.is_empty() {
-                    msg!("Using PDA-only signer seeds with bump: {}", bump);
                     vec![&bump_bytes] // Just the bump byte
                 } else {
-                    msg!("Using regular signer seeds with {} seeds plus bump: {}", seeds.len(), bump);
                     // Normal case: original seeds + bump
                     let mut all_seeds: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
                     all_seeds.push(&bump_bytes);
                     all_seeds
                 };
-                
-                // Debug the signer seeds
-                msg!("Final signer seeds count: {}", signer_seed_slices.len());
-                for (i, seed) in signer_seed_slices.iter().enumerate() {
-                    msg!("Signer seed {}: len={}", i, seed.len());
-                }
-                
-                // Debug token account info before burn
-                msg!("About to burn: authority={}, source_ata={}, amount={}", 
-                     accounts.wallet.key, accounts.source_ata.key, amount);
-                msg!("Source ATA owner: {}", accounts.source_ata.owner);
                 
                 // Pass the correctly constructed signer seeds
                 burn(
@@ -783,10 +758,6 @@ fn burn<'a>(
     amount: u64,
     signer_seeds: &[&[u8]],
 ) -> ProgramResult {
-    msg!("burn: signer_seeds.len()={}", signer_seeds.len());
-    for (i, seed) in signer_seeds.iter().enumerate() {
-        msg!("burn: seed[{}].len()={}, seed[{}]={:?}", i, seed.len(), i, seed);
-    }
     invoke_signed(
         &spl_token_2022::instruction::burn(
             token_program.key,

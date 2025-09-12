@@ -589,25 +589,7 @@ fn handle_take_token_transfer(
         }
         LockUnlock => {
             let decimals = get_mint_decimals(accounts.token_mint)?;
-            // Determine signer seeds for PDA transfers
-            let signer_seeds = if let (Some(program_id), Some(seeds)) = (pda_program_id, pda_seeds) {
-                // Validate PDA derivation
-                let seed_refs: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
-                let (derived_pda, _bump) = Pubkey::find_program_address(&seed_refs, program_id);
-                
-                if derived_pda != *accounts.wallet.key {
-                    msg!(
-                        "PDA derivation failed: expected {}, got {}",
-                        derived_pda,
-                        accounts.wallet.key
-                    );
-                    return Err(ProgramError::InvalidAccountData);
-                }
-                
-                seed_refs
-            } else {
-                vec![]
-            };
+            let signer_seeds = determine_pda_signer_seeds(pda_program_id, pda_seeds, accounts.wallet.key)?;
             
             let transfer_info =
                 create_take_token_transfer_info(accounts, amount, decimals, None, &signer_seeds);
@@ -616,25 +598,7 @@ fn handle_take_token_transfer(
         }
         LockUnlockFee => {
             let (fee, decimals) = get_fee_and_decimals(accounts.token_mint, amount)?;
-            // Determine signer seeds for PDA transfers
-            let signer_seeds = if let (Some(program_id), Some(seeds)) = (pda_program_id, pda_seeds) {
-                // Validate PDA derivation
-                let seed_refs: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
-                let (derived_pda, _bump) = Pubkey::find_program_address(&seed_refs, program_id);
-                
-                if derived_pda != *accounts.wallet.key {
-                    msg!(
-                        "PDA derivation failed: expected {}, got {}",
-                        derived_pda,
-                        accounts.wallet.key
-                    );
-                    return Err(ProgramError::InvalidAccountData);
-                }
-                
-                seed_refs
-            } else {
-                vec![]
-            };
+            let signer_seeds = determine_pda_signer_seeds(pda_program_id, pda_seeds, accounts.wallet.key)?;
             
             let transfer_info =
                 create_take_token_transfer_info(accounts, amount, decimals, Some(fee), &signer_seeds);
@@ -652,6 +616,33 @@ fn get_mint_decimals(token_mint: &AccountInfo<'_>) -> Result<u8, ProgramError> {
     let mint_data = token_mint.try_borrow_data()?;
     let mint_state = StateWithExtensions::<Mint>::unpack(&mint_data)?;
     Ok(mint_state.base.decimals)
+}
+
+/// Helper function to determine signer seeds for PDA transfers
+/// Returns empty vec if no PDA info provided, or validated seed refs if PDA is valid
+fn determine_pda_signer_seeds<'a>(
+    pda_program_id: &Option<Pubkey>,
+    pda_seeds: &'a Option<Vec<Vec<u8>>>,
+    wallet_key: &Pubkey,
+) -> Result<Vec<&'a [u8]>, ProgramError> {
+    if let (Some(program_id), Some(seeds)) = (pda_program_id, pda_seeds) {
+        // Validate PDA derivation
+        let seed_refs: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
+        let (derived_pda, _bump) = Pubkey::find_program_address(&seed_refs, program_id);
+        
+        if derived_pda != *wallet_key {
+            msg!(
+                "PDA derivation failed: expected {}, got {}",
+                derived_pda,
+                wallet_key
+            );
+            return Err(ProgramError::InvalidAccountData);
+        }
+        
+        Ok(seed_refs)
+    } else {
+        Ok(vec![])
+    }
 }
 
 fn get_fee_and_decimals(

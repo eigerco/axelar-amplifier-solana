@@ -41,6 +41,8 @@ hex.workspace = true
 mpl-token-metadata.workspace = true
 program-utils = { workspace = true, default-features = false }
 solana-program.workspace = true
+spl-associated-token-account = { workspace = true, features = ["no-entrypoint"] }
+spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
 
 [dev-dependencies]
 ethers-core.workspace = true

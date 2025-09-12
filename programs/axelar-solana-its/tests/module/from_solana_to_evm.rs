@@ -1143,16 +1143,43 @@ async fn test_transfer_with_pda_as_source(
         gas_value: 0,
     };
     
-    // Build the full instruction with all required accounts
-    // Note: This is a simplified version - in practice we'd need all the accounts required by ITS
+    // Create the full memo program instruction with all required accounts
+    // The memo program needs to pass all ITS accounts for the CPI call to succeed
+    let (gateway_root_pda, _) = axelar_solana_gateway::get_gateway_root_config_pda();
+    let (its_root_pda, _) = axelar_solana_its::find_its_root_pda();
+    let (token_manager_pda, _) = axelar_solana_its::find_token_manager_pda(&its_root_pda, &token_id);
+    let token_manager_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
+        &token_manager_pda, &interchain_token_mint, &spl_token_2022::id()
+    );
+    let memo_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
+        &memo_counter_pda, &interchain_token_mint, &spl_token_2022::id()
+    );
+    let (call_contract_signing_pda, _) = axelar_solana_gateway::get_call_contract_signing_pda(axelar_solana_its::ID);
+    let (gas_config_pda, _) = axelar_solana_gas_service::get_config_pda();
+    
     let memo_transfer_instruction = solana_program::instruction::Instruction {
         program_id: memo_program_id,
         accounts: vec![
-            // Memo program's counter PDA (source of transfer)
-            solana_program::instruction::AccountMeta::new(memo_counter_pda, false),
-            // Payer (user wallet)
-            solana_program::instruction::AccountMeta::new(ctx.solana_wallet, true),
-            // We'd need to add all the ITS accounts here for a real transfer
+            // Memo program accounts (first 2 are consumed by the memo program)
+            solana_program::instruction::AccountMeta::new(memo_counter_pda, false), // Counter PDA
+            solana_program::instruction::AccountMeta::new(ctx.solana_wallet, true), // Payer
+            
+            // ITS accounts (passed through to the CPI call)
+            solana_program::instruction::AccountMeta::new(ctx.solana_wallet, true), // Payer for ITS
+            solana_program::instruction::AccountMeta::new_readonly(memo_counter_pda, false), // Wallet (source)
+            solana_program::instruction::AccountMeta::new(memo_ata, false), // Source ATA
+            solana_program::instruction::AccountMeta::new(interchain_token_mint, false), // Mint
+            solana_program::instruction::AccountMeta::new(token_manager_pda, false), // Token manager
+            solana_program::instruction::AccountMeta::new(token_manager_ata, false), // Token manager ATA
+            solana_program::instruction::AccountMeta::new_readonly(spl_token_2022::id(), false), // Token program
+            solana_program::instruction::AccountMeta::new_readonly(gateway_root_pda, false), // Gateway root
+            solana_program::instruction::AccountMeta::new_readonly(axelar_solana_gateway::ID, false), // Gateway program
+            solana_program::instruction::AccountMeta::new(gas_config_pda, false), // Gas config
+            solana_program::instruction::AccountMeta::new_readonly(axelar_solana_gas_service::ID, false), // Gas service
+            solana_program::instruction::AccountMeta::new_readonly(solana_program::system_program::ID, false), // System program
+            solana_program::instruction::AccountMeta::new_readonly(its_root_pda, false), // ITS root
+            solana_program::instruction::AccountMeta::new_readonly(call_contract_signing_pda, false), // Signing PDA
+            solana_program::instruction::AccountMeta::new_readonly(axelar_solana_its::ID, false), // ITS program
         ],
         data: borsh::to_vec(&memo_transfer_ix)?,
     };
@@ -1175,18 +1202,10 @@ async fn test_transfer_with_pda_as_source(
             );
         },
         Err(e) => {
-            // The transaction may fail due to missing accounts or other setup issues
-            // But we can still demonstrate the concept
+            // The transaction should succeed with proper account setup
+            // If it fails, we need to investigate why
             let error_msg = format!("{:?}", e);
-            println!("Memo PDA transfer failed (expected due to incomplete account setup):");
-            println!("Error: {}", error_msg);
-            
-            // Verify it's not a signing error (which would indicate PDA signing issues)
-            if error_msg.contains("NotEnoughSigners") {
-                panic!("❌ PDA signing error - this shouldn't happen with proper CPI");
-            } else {
-                println!("✓ Failure is due to account setup, not PDA signing (this is expected)");
-            }
+            panic!("❌ Memo PDA transfer failed unexpectedly: {}", error_msg);
         }
     }
 

@@ -293,7 +293,7 @@ pub(crate) fn process_outbound_transfer<'a>(
         return Err(ProgramError::InvalidAccountData);
     }
 
-    let amount_minus_fees = take_token(&take_token_accounts, &token_manager, amount)?;
+    let amount_minus_fees = take_token_with_pda(&take_token_accounts, &token_manager, amount, &pda_program_id, &pda_seeds)?;
     amount = amount_minus_fees;
 
     // Determine the correct source_address based on whether wallet is on-curve or PDA
@@ -355,7 +355,23 @@ pub(crate) fn take_token(
         accounts.token_manager_pda,
     )?;
 
-    handle_take_token_transfer(accounts, token_manager, amount)
+    handle_take_token_transfer(accounts, token_manager, amount, &None, &None)
+}
+
+pub(crate) fn take_token_with_pda(
+    accounts: &TakeTokenAccounts<'_>,
+    token_manager: &TokenManager,
+    amount: u64,
+    pda_program_id: &Option<Pubkey>,
+    pda_seeds: &Option<Vec<Vec<u8>>>,
+) -> Result<u64, ProgramError> {
+    token_manager_processor::validate_token_manager_type(
+        token_manager.ty,
+        accounts.token_mint,
+        accounts.token_manager_pda,
+    )?;
+
+    handle_take_token_transfer(accounts, token_manager, amount, pda_program_id, pda_seeds)
 }
 
 fn give_token(
@@ -503,6 +519,8 @@ fn handle_take_token_transfer(
     accounts: &TakeTokenAccounts<'_>,
     token_manager: &TokenManager,
     amount: u64,
+    pda_program_id: &Option<Pubkey>,
+    pda_seeds: &Option<Vec<Vec<u8>>>,
 ) -> Result<u64, ProgramError> {
     use token_manager::Type::{
         LockUnlock, LockUnlockFee, MintBurn, MintBurnFrom, NativeInterchainToken,
@@ -517,27 +535,134 @@ fn handle_take_token_transfer(
 
     let transferred = match token_manager.ty {
         NativeInterchainToken | MintBurn | MintBurnFrom => {
-            burn(
-                accounts.payer,
-                accounts.token_program,
-                accounts.token_mint,
-                accounts.source_ata,
-                amount,
-                &[],
-            )?;
+            if let (Some(program_id), Some(seeds)) = (pda_program_id, pda_seeds) {
+                // PDA case: validate derivation and burn with PDA authority
+                let seed_refs: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
+                let (derived_pda, bump) = Pubkey::find_program_address(&seed_refs, program_id);
+                
+                msg!("PDA validation: program_id={}, seeds_len={}", program_id, seeds.len());
+                msg!("Expected memo program ID: {}", "memPJFxP6H6bjEKpUSJ4KC7C4dKAfNE3xWrTpJBKDwN");
+                for (i, seed) in seeds.iter().enumerate() {
+                    msg!("Seed {}: len={}", i, seed.len());
+                }
+                msg!("Derived PDA: {}, calculated bump: {}", derived_pda, bump);
+                
+                // Test if we can create program address with the calculated bump
+                match solana_program::pubkey::Pubkey::create_program_address(&[&[bump]], program_id) {
+                    Ok(addr) => msg!("✓ create_program_address with bump {} succeeded: {}", bump, addr),
+                    Err(e) => msg!("✗ create_program_address with bump {} failed: {:?}", bump, e),
+                }
+                
+                if derived_pda != *accounts.wallet.key {
+                    msg!(
+                        "PDA derivation failed: expected {}, got {}",
+                        derived_pda,
+                        accounts.wallet.key
+                    );
+                    return Err(ProgramError::InvalidAccountData);
+                }
+                
+                // Build signer seeds with bump for invoke_signed
+                // The signer seeds must match exactly how the PDA was originally derived
+                let bump_bytes = [bump];
+                
+                // For PDAs derived with no seeds: find_program_address(&[], program_id)
+                // For PDA created with empty seeds, we need to sign with just the bump
+                let signer_seed_slices: Vec<&[u8]> = if seeds.is_empty() {
+                    msg!("Using PDA-only signer seeds with bump: {}", bump);
+                    vec![&bump_bytes] // Just the bump byte
+                } else {
+                    msg!("Using regular signer seeds with {} seeds plus bump: {}", seeds.len(), bump);
+                    // Normal case: original seeds + bump
+                    let mut all_seeds: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
+                    all_seeds.push(&bump_bytes);
+                    all_seeds
+                };
+                
+                // Debug the signer seeds
+                msg!("Final signer seeds count: {}", signer_seed_slices.len());
+                for (i, seed) in signer_seed_slices.iter().enumerate() {
+                    msg!("Signer seed {}: len={}", i, seed.len());
+                }
+                
+                // Debug token account info before burn
+                msg!("About to burn: authority={}, source_ata={}, amount={}", 
+                     accounts.wallet.key, accounts.source_ata.key, amount);
+                msg!("Source ATA owner: {}", accounts.source_ata.owner);
+                
+                // Pass the correctly constructed signer seeds
+                burn(
+                    accounts.wallet, // Use PDA as authority
+                    accounts.token_program,
+                    accounts.token_mint,
+                    accounts.source_ata,
+                    amount,
+                    &signer_seed_slices, // Use the correctly built seed structure
+                )?;
+            } else {
+                // Regular user wallet case
+                burn(
+                    accounts.payer, // Use payer as authority
+                    accounts.token_program,
+                    accounts.token_mint,
+                    accounts.source_ata,
+                    amount,
+                    &[],
+                )?;
+            }
             amount
         }
         LockUnlock => {
             let decimals = get_mint_decimals(accounts.token_mint)?;
+            // Determine signer seeds for PDA transfers
+            let signer_seeds = if let (Some(program_id), Some(seeds)) = (pda_program_id, pda_seeds) {
+                // Validate PDA derivation
+                let seed_refs: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
+                let (derived_pda, _bump) = Pubkey::find_program_address(&seed_refs, program_id);
+                
+                if derived_pda != *accounts.wallet.key {
+                    msg!(
+                        "PDA derivation failed: expected {}, got {}",
+                        derived_pda,
+                        accounts.wallet.key
+                    );
+                    return Err(ProgramError::InvalidAccountData);
+                }
+                
+                seed_refs
+            } else {
+                vec![]
+            };
+            
             let transfer_info =
-                create_take_token_transfer_info(accounts, amount, decimals, None, &[]);
+                create_take_token_transfer_info(accounts, amount, decimals, None, &signer_seeds);
             transfer_to(&transfer_info)?;
             amount
         }
         LockUnlockFee => {
             let (fee, decimals) = get_fee_and_decimals(accounts.token_mint, amount)?;
+            // Determine signer seeds for PDA transfers
+            let signer_seeds = if let (Some(program_id), Some(seeds)) = (pda_program_id, pda_seeds) {
+                // Validate PDA derivation
+                let seed_refs: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
+                let (derived_pda, _bump) = Pubkey::find_program_address(&seed_refs, program_id);
+                
+                if derived_pda != *accounts.wallet.key {
+                    msg!(
+                        "PDA derivation failed: expected {}, got {}",
+                        derived_pda,
+                        accounts.wallet.key
+                    );
+                    return Err(ProgramError::InvalidAccountData);
+                }
+                
+                seed_refs
+            } else {
+                vec![]
+            };
+            
             let transfer_info =
-                create_take_token_transfer_info(accounts, amount, decimals, Some(fee), &[]);
+                create_take_token_transfer_info(accounts, amount, decimals, Some(fee), &signer_seeds);
             transfer_with_fee_to(&transfer_info)?;
             amount
                 .checked_sub(fee)
@@ -658,6 +783,10 @@ fn burn<'a>(
     amount: u64,
     signer_seeds: &[&[u8]],
 ) -> ProgramResult {
+    msg!("burn: signer_seeds.len()={}", signer_seeds.len());
+    for (i, seed) in signer_seeds.iter().enumerate() {
+        msg!("burn: seed[{}].len()={}, seed[{}]={:?}", i, seed.len(), i, seed);
+    }
     invoke_signed(
         &spl_token_2022::instruction::burn(
             token_program.key,
@@ -672,7 +801,7 @@ fn burn<'a>(
             token_mint.clone(),
             authority.clone(),
         ],
-        &[signer_seeds],
+        &[signer_seeds], // invoke_signed expects &[&[&[u8]]]
     )?;
     Ok(())
 }

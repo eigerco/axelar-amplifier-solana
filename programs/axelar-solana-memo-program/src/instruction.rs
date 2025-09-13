@@ -135,6 +135,44 @@ pub fn call_gateway_with_memo(
     })
 }
 
+/// Creates a [`AxelarMemoInstruction::SendInterchainTransfer`] instruction.
+pub fn send_interchain_transfer(
+    memo_counter_pda: &Pubkey,
+    payer: &Pubkey,
+    token_id: [u8; 32],
+    destination_chain: String,
+    destination_address: Vec<u8>,
+    amount: u64,
+    mint: Pubkey,
+    token_program: Pubkey,
+    gas_value: u128,
+    additional_accounts: &[AccountMeta],
+) -> Result<Instruction, ProgramError> {
+    let data = to_vec(&AxelarMemoInstruction::SendInterchainTransfer {
+        token_id,
+        destination_chain,
+        destination_address,
+        amount,
+        mint,
+        token_program,
+        gas_value,
+    })?;
+
+    let mut accounts = vec![
+        AccountMeta::new(*memo_counter_pda, false), // Counter PDA
+        AccountMeta::new(*payer, true), // Payer
+    ];
+    
+    // Add any additional accounts needed for the ITS CPI call
+    accounts.extend_from_slice(additional_accounts);
+
+    Ok(Instruction {
+        program_id: crate::ID,
+        accounts,
+        data,
+    })
+}
+
 /// Helper function to build a memo payload instruction
 pub mod from_axelar_to_solana {
     use axelar_solana_gateway::executable::EncodingScheme;

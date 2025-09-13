@@ -18,6 +18,7 @@ use solana_program::program_error::ProgramError;
 use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
 use solana_program::{msg, system_program};
+use std::str::FromStr;
 use std::str::from_utf8;
 
 use crate::assert_counter_pda_seeds;
@@ -320,82 +321,122 @@ pub fn process_send_interchain_transfer(
     
     msg!("Memo program initiating interchain transfer from PDA: {}", counter_pda.key);
     msg!("Transfer amount: {}, destination: {}", amount, destination_chain);
+    msg!("Total accounts passed to memo program: {}", accounts.len());
     
-    // First, transfer the tokens from the memo program's PDA to the payer
-    let memo_pda_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
-        counter_pda.key,
-        &mint,
-        &token_program,
-    );
+    msg!("Initiating interchain transfer directly from memo PDA");
     
-    let payer_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
-        payer.key,
-        &mint,
-        &token_program,
-    );
+    // Manually construct the instruction since the helper function incorrectly marks the wallet as a signer
+    use borsh::to_vec;
+    use solana_program::instruction::{AccountMeta, Instruction};
     
-    // Find the ATA accounts in the provided accounts
-    let source_ata_account = accounts[2..].iter()
-        .find(|acc| acc.key == &memo_pda_ata)
-        .ok_or(ProgramError::InvalidAccountData)?;
-    let dest_ata_account = accounts[2..].iter()
-        .find(|acc| acc.key == &payer_ata)
-        .ok_or(ProgramError::InvalidAccountData)?;
+    let (gateway_root_pda, _) = axelar_solana_gateway::get_gateway_root_config_pda();
+    let (its_root_pda, _) = axelar_solana_its::find_its_root_pda();
+    let (token_manager_pda, _) = axelar_solana_its::find_token_manager_pda(&its_root_pda, &token_id);
+    let token_manager_ata = spl_associated_token_account::get_associated_token_address_with_program_id(&token_manager_pda, &mint, &token_program);
+    let source_ata = spl_associated_token_account::get_associated_token_address_with_program_id(counter_pda.key, &mint, &token_program);
+    let (call_contract_signing_pda, signing_pda_bump) = axelar_solana_gateway::get_call_contract_signing_pda(axelar_solana_its::ID);
+    // Gas service config PDA - we derive it manually since we don't have the gas service crate
+    // This matches what the gas service uses: find_program_address(&[b"config"], &gas_service_id)
+    let gas_service_id = Pubkey::from_str("GasPTBV8jYURiUWYnL8a2wNqkBB7fBHqBUr1JcpEDKHC").unwrap();
+    let (gas_config_pda, _) = Pubkey::find_program_address(&[b"config"], &gas_service_id);
     
-    let mint_account = accounts[2..].iter()
-        .find(|acc| acc.key == &mint)
-        .ok_or(ProgramError::InvalidAccountData)?;
+    // The accounts array passed to this function has:
+    // [0] = counter_pda
+    // [1] = payer  
+    // [2] = payer (again for ITS)
+    // [3] = wallet placeholder (but we want to use counter_pda)
+    // [4] = payer_ata (not what we want)
+    // [5] = memo_ata (THIS is what we want as source!)
+    // [6] = mint
+    // [7] = token_manager_pda
+    // [8] = token_manager_ata
+    // [9] = token_program
+    // [10] = gateway_root_pda
+    // [11] = gateway_program
+    // [12] = gas_config_pda
+    // [13] = gas_service_program
+    // [14] = system_program
+    // [15] = its_root_pda
+    // [16] = call_contract_signing_pda
+    // [17] = its_program
+    //
+    // For PDA transfer, we need:
+    // - payer (signer)
+    // - wallet = counter_pda (NOT signer, but this is the source of funds)
+    // - source_ata = memo_ata (the PDA's ATA)
+    let transfer_accounts = vec![
+        AccountMeta::new(*accounts[1].key, true), // payer is signer
+        AccountMeta::new(*accounts[0].key, false), // wallet = counter_pda (NOT a signer, but writable since it owns tokens)
+        AccountMeta::new(*accounts[5].key, false), // source_ata = memo_ata (PDA's ATA at index 5)
+        AccountMeta::new(*accounts[6].key, false), // mint
+        AccountMeta::new(*accounts[7].key, false), // token_manager_pda
+        AccountMeta::new(*accounts[8].key, false), // token_manager_ata
+        AccountMeta::new_readonly(*accounts[9].key, false), // token_program
+        AccountMeta::new_readonly(*accounts[10].key, false), // gateway_root_pda
+        AccountMeta::new_readonly(*accounts[11].key, false), // gateway_program
+        AccountMeta::new(*accounts[12].key, false), // gas_config_pda
+        AccountMeta::new_readonly(*accounts[13].key, false), // gas_service_program
+        AccountMeta::new_readonly(*accounts[14].key, false), // system_program
+        AccountMeta::new_readonly(*accounts[15].key, false), // its_root_pda
+        AccountMeta::new_readonly(*accounts[16].key, false), // call_contract_signing_pda
+        AccountMeta::new_readonly(*accounts[17].key, false), // its_program
+    ];
     
-    let decimals = {
-        let mint_data = mint_account.try_borrow_data()?;
-        let mint_state = spl_token_2022::state::Mint::unpack(&mint_data)?;
-        mint_state.decimals
+    let data = to_vec(&axelar_solana_its::instruction::InterchainTokenServiceInstruction::InterchainTransfer {
+        token_id,
+        destination_chain: destination_chain.clone(),
+        destination_address,
+        amount,
+        gas_value: gas_value.try_into().map_err(|_| ProgramError::InvalidInstructionData)?,
+        signing_pda_bump,
+        pda_program_id: Some(crate::ID), // Memo program ID
+        pda_seeds: Some(vec![]), // No seeds since counter PDA is derived with find_program_address(&[], program_id)
+    })?;
+    
+    let transfer_ix = Instruction {
+        program_id: axelar_solana_its::ID,
+        accounts: transfer_accounts,
+        data,
     };
     
-    // Create and execute transfer instruction
-    let transfer_ix = spl_token_2022::instruction::transfer_checked(
-        &token_program,
-        &memo_pda_ata,
-        &mint,
-        &payer_ata,
-        counter_pda.key,
-        &[],
-        amount,
-        decimals,
-    )?;
+    // Verify PDA derivation and get the correct bump
+    let (expected_counter_pda, expected_bump) = Pubkey::find_program_address(&[], &crate::ID);
+    msg!("Expected counter PDA: {}, bump: {}", expected_counter_pda, expected_bump);
+    msg!("Actual counter PDA: {}, match: {}", accounts[0].key, expected_counter_pda == *accounts[0].key);
+    msg!("Counter account bump: {}, expected bump: {}", counter_account.bump, expected_bump);
     
+    if expected_counter_pda != *accounts[0].key {
+        msg!("ERROR: Counter PDA mismatch!");
+        return Err(ProgramError::InvalidArgument);
+    }
+    
+    // TODO This is awful.
+    // Make the CPI call to ITS
+    // We need to pass accounts in the same order as transfer_accounts expects them
+    let invoke_accounts = [
+        accounts[1].clone(),    // payer
+        accounts[0].clone(),    // counter_pda (wallet)
+        accounts[5].clone(),    // memo_ata (source_ata)
+        accounts[6].clone(),    // mint
+        accounts[7].clone(),    // token_manager_pda
+        accounts[8].clone(),    // token_manager_ata
+        accounts[9].clone(),    // token_program
+        accounts[10].clone(),   // gateway_root_pda
+        accounts[11].clone(),   // gateway_program
+        accounts[12].clone(),   // gas_config_pda
+        accounts[13].clone(),   // gas_service_program
+        accounts[14].clone(),   // system_program
+        accounts[15].clone(),   // its_root_pda
+        accounts[16].clone(),   // call_contract_signing_pda
+        accounts[17].clone(),   // its_program
+    ];
+    
+    // Use invoke_signed since we're using a PDA (counter_pda) that we own
+    // The counter PDA is derived with empty seeds and the memo program ID
     invoke_signed(
         &transfer_ix,
-        &[
-            source_ata_account.clone(),
-            mint_account.clone(),
-            dest_ata_account.clone(),
-            counter_pda.clone(),
-        ],
-        &[&[&[counter_account.bump]]],
-    )?;
-    
-    msg!("Tokens transferred from memo PDA to payer, now initiating interchain transfer");
-    
-    // Now create the interchain transfer instruction with payer as source
-    let transfer_ix = axelar_solana_its::instruction::interchain_transfer(
-        *payer.key,                    // Payer (pays fees)
-        *payer.key,                    // Source account (payer has the tokens now)
-        token_id,                      // Token ID
-        destination_chain.clone(),     // Destination chain
-        destination_address,           // Destination address
-        amount,                        // Amount to transfer
-        mint,                          // Token mint
-        token_program,                 // Token program
-        gas_value.try_into().map_err(|_| ProgramError::InvalidInstructionData)?, // Gas value
-        None,                          // No PDA info needed
-        None,                          // No PDA seeds needed
-    )?;
-    
-    // Make the CPI call to ITS
-    invoke(
-        &transfer_ix,
-        &accounts[2..], // Skip the first 2 accounts which are for the memo program
+        &invoke_accounts,
+        &[&[&[expected_bump]]], // Signer seeds: [bump] for the counter PDA (derived with empty seeds + bump)
     )?;
     
     msg!("Interchain transfer initiated successfully");

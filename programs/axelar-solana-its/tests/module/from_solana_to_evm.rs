@@ -3,6 +3,7 @@ use axelar_solana_its::event::InterchainTransfer;
 use borsh::BorshDeserialize;
 use event_utils::Event;
 use evm_contracts_test_suite::ethers::signers::Signer;
+use alloy_primitives::hex;
 use mpl_token_metadata::accounts::Metadata;
 use mpl_token_metadata::instructions::CreateV1Builder;
 use mpl_token_metadata::types::TokenStandard;
@@ -1126,17 +1127,6 @@ async fn test_transfer_with_pda_as_source(
     
     ctx.send_solana_tx(&[create_memo_ata_ix, mint_to_memo_ix]).await.unwrap();
     
-    // Now use the memo program's SendInterchainTransfer feature
-    let memo_transfer_ix = axelar_solana_memo_program::instruction::AxelarMemoInstruction::SendInterchainTransfer {
-        token_id,
-        destination_chain: ctx.evm_chain_name.clone(),
-        destination_address: destination_address.clone(),
-        amount: 25,
-        mint: interchain_token_mint,
-        token_program: spl_token_2022::id(),
-        gas_value: 0,
-    };
-    
     // Create the full memo program instruction with all required accounts
     // The memo program needs to pass all ITS accounts for the CPI call to succeed
     let payer_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
@@ -1156,45 +1146,71 @@ async fn test_transfer_with_pda_as_source(
     let (call_contract_signing_pda, _) = axelar_solana_gateway::get_call_contract_signing_pda(axelar_solana_its::ID);
     let (gas_config_pda, _) = axelar_solana_gas_service::get_config_pda();
     
-    let memo_transfer_instruction = solana_program::instruction::Instruction {
-        program_id: memo_program_id,
-        accounts: vec![
-            // Memo program accounts (first 2 are consumed by the memo program)
-            solana_program::instruction::AccountMeta::new(memo_counter_pda, false), // Counter PDA
-            solana_program::instruction::AccountMeta::new(ctx.solana_wallet, true), // Payer
-            
-            // ITS accounts (passed through to the CPI call)
-            solana_program::instruction::AccountMeta::new(ctx.solana_wallet, true), // Payer for ITS
-            solana_program::instruction::AccountMeta::new_readonly(ctx.solana_wallet, false), // Wallet (using payer as source since tokens are already burned)
-            solana_program::instruction::AccountMeta::new(payer_ata, false), // Source ATA (payer's ATA for ITS)
-            solana_program::instruction::AccountMeta::new(memo_ata, false), // Memo PDA's ATA (for burn operation)
-            solana_program::instruction::AccountMeta::new(interchain_token_mint, false), // Mint
-            solana_program::instruction::AccountMeta::new(token_manager_pda, false), // Token manager
-            solana_program::instruction::AccountMeta::new(token_manager_ata, false), // Token manager ATA
-            solana_program::instruction::AccountMeta::new_readonly(spl_token_2022::id(), false), // Token program
-            solana_program::instruction::AccountMeta::new_readonly(gateway_root_pda, false), // Gateway root
-            solana_program::instruction::AccountMeta::new_readonly(axelar_solana_gateway::ID, false), // Gateway program
-            solana_program::instruction::AccountMeta::new(gas_config_pda, false), // Gas config
-            solana_program::instruction::AccountMeta::new_readonly(axelar_solana_gas_service::ID, false), // Gas service
-            solana_program::instruction::AccountMeta::new_readonly(solana_program::system_program::ID, false), // System program
-            solana_program::instruction::AccountMeta::new_readonly(its_root_pda, false), // ITS root
-            solana_program::instruction::AccountMeta::new_readonly(call_contract_signing_pda, false), // Signing PDA
-            solana_program::instruction::AccountMeta::new_readonly(axelar_solana_its::ID, false), // ITS program
-        ],
-        data: borsh::to_vec(&memo_transfer_ix)?,
-    };
+    // ITS accounts (passed through to the CPI call)
+    let its_accounts = vec![
+        solana_program::instruction::AccountMeta::new(ctx.solana_wallet, true), // Payer for ITS
+        solana_program::instruction::AccountMeta::new_readonly(ctx.solana_wallet, false), // Wallet (using payer as source since tokens are already burned)
+        solana_program::instruction::AccountMeta::new(payer_ata, false), // Source ATA (payer's ATA for ITS)
+        solana_program::instruction::AccountMeta::new(memo_ata, false), // Memo PDA's ATA (for burn operation)
+        solana_program::instruction::AccountMeta::new(interchain_token_mint, false), // Mint
+        solana_program::instruction::AccountMeta::new(token_manager_pda, false), // Token manager
+        solana_program::instruction::AccountMeta::new(token_manager_ata, false), // Token manager ATA
+        solana_program::instruction::AccountMeta::new_readonly(spl_token_2022::id(), false), // Token program
+        solana_program::instruction::AccountMeta::new_readonly(gateway_root_pda, false), // Gateway root
+        solana_program::instruction::AccountMeta::new_readonly(axelar_solana_gateway::ID, false), // Gateway program
+        solana_program::instruction::AccountMeta::new(gas_config_pda, false), // Gas config
+        solana_program::instruction::AccountMeta::new_readonly(axelar_solana_gas_service::ID, false), // Gas service
+        solana_program::instruction::AccountMeta::new_readonly(solana_program::system_program::ID, false), // System program
+        solana_program::instruction::AccountMeta::new_readonly(its_root_pda, false), // ITS root
+        solana_program::instruction::AccountMeta::new_readonly(call_contract_signing_pda, false), // Signing PDA
+        solana_program::instruction::AccountMeta::new_readonly(axelar_solana_its::ID, false), // ITS program
+    ];
+    
+    let memo_transfer_instruction = axelar_solana_memo_program::instruction::send_interchain_transfer(
+        &memo_counter_pda,
+        &ctx.solana_wallet,
+        token_id,
+        ctx.evm_chain_name.clone(),
+        destination_address.clone(),
+        25,
+        interchain_token_mint,
+        spl_token_2022::id(),
+        0,
+        &its_accounts,
+    )?;
     
     // Execute the memo program instruction
     let memo_tx_result = ctx.send_solana_tx(&[memo_transfer_instruction]).await;
     
     match memo_tx_result {
         Ok(memo_tx) => {
-            let memo_logs = &memo_tx.metadata.as_ref().unwrap().log_messages;
-            let found_program_source = memo_logs.iter().any(|log| {
-                log.contains(&memo_program_id.to_string())
-            });
+            // Extract the CallContract event to get the GMP payload
+            let call_contract_event = fetch_first_call_contract_event_from_tx(&memo_tx);
             
-            assert!(found_program_source, "Source address attribution not found in plain text logs");
+            // Decode the GMP payload to verify the source address
+            let gmp_payload = GMPPayload::decode(&call_contract_event.payload)?;
+            
+            if let GMPPayload::SendToHub(hub_message) = gmp_payload {
+                if let GMPPayload::InterchainTransfer(transfer_message) = GMPPayload::decode(hub_message.payload.as_ref())? {
+                    // Verify that the source address in the event is the memo program ID
+                    let source_address_bytes = transfer_message.source_address.0.as_ref();
+                    let expected_source = memo_program_id.to_bytes();
+                    
+                    assert_eq!(
+                        source_address_bytes,
+                        expected_source.as_ref(),
+                        "Source address should be memo program ID. Expected: {}, Got: {}",
+                        hex::encode(&expected_source),
+                        hex::encode(source_address_bytes)
+                    );
+                    
+                    println!("✅ Successfully verified memo program ID as source address in emitted event");
+                } else {
+                    panic!("Expected InterchainTransfer payload in hub message");
+                }
+            } else {
+                panic!("Expected SendToHub payload");
+            }
             
             axelar_solana_gateway_test_fixtures::assert_msg_present_in_logs(
                 memo_tx,

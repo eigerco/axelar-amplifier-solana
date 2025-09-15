@@ -1,11 +1,12 @@
 use axelar_solana_gateway_test_fixtures::base::FindLog;
+use axelar_solana_its::event::InterchainTransfer;
 use borsh::BorshDeserialize;
+use event_utils::Event;
 use evm_contracts_test_suite::ethers::signers::Signer;
 use mpl_token_metadata::accounts::Metadata;
 use mpl_token_metadata::instructions::CreateV1Builder;
 use mpl_token_metadata::types::TokenStandard;
 use solana_program_test::tokio;
-use solana_sdk::clock::Clock;
 use solana_sdk::program_pack::Pack as _;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
@@ -62,7 +63,6 @@ async fn custom_token(
     let register_metadata = axelar_solana_its::instruction::register_token_metadata(
         ctx.solana_wallet,
         custom_solana_token,
-        spl_token_2022::id(),
         0,
     )?;
 
@@ -509,7 +509,6 @@ async fn transfer_fails_with_wrong_gas_service(ctx: &mut ItsTestContext) -> anyh
     )?;
 
     ctx.send_solana_tx(&[create_ata_ix, mint_ix]).await.unwrap();
-    let clock_sysvar = ctx.solana_chain.get_sysvar::<Clock>().await;
     let mut transfer_ix = axelar_solana_its::instruction::interchain_transfer(
         ctx.solana_wallet,
         token_account,
@@ -520,10 +519,9 @@ async fn transfer_fails_with_wrong_gas_service(ctx: &mut ItsTestContext) -> anyh
         solana_token,
         spl_token_2022::id(),
         1000, // gas_value needs to be greater than 0 for pay_gas to be called
-        clock_sysvar.unix_timestamp,
     )
     .unwrap();
-    transfer_ix.accounts[10].pubkey = Pubkey::new_unique(); // invalid gas service
+    transfer_ix.accounts[9].pubkey = Pubkey::new_unique(); // invalid gas service
 
     assert!(ctx
         .send_solana_tx(&[transfer_ix])
@@ -580,7 +578,6 @@ async fn test_lock_unlock_transfer_fails_with_token_manager_as_authority(
     ctx.send_solana_tx(&[create_ata_ix, mint_ix]).await.unwrap();
 
     // Try to transfer from the TokenManager to payer. This should fail after the fix
-    let clock_sysvar = ctx.solana_chain.get_sysvar::<Clock>().await;
     let transfer_ix = axelar_solana_its::instruction::interchain_transfer(
         ctx.solana_chain.fixture.payer.pubkey(),
         token_manager_ata,
@@ -591,7 +588,6 @@ async fn test_lock_unlock_transfer_fails_with_token_manager_as_authority(
         solana_token,
         spl_token_2022::id(),
         0,
-        clock_sysvar.unix_timestamp,
     )
     .unwrap();
 
@@ -644,7 +640,6 @@ async fn test_mint_burn_from_interchain_transfer_with_approval(
     let register_metadata = axelar_solana_its::instruction::register_token_metadata(
         ctx.solana_wallet,
         solana_token,
-        spl_token_2022::id(),
         0,
     )?;
 
@@ -685,6 +680,19 @@ async fn test_mint_burn_from_interchain_transfer_with_approval(
         vec![],
         0,
     )?;
+
+    // Check that an invalid program account leads to a failure
+    {
+        let mut link_token_ix = link_token_ix.clone();
+        link_token_ix.accounts[9].pubkey = Pubkey::new_unique();
+        let result = ctx.send_solana_tx(&[link_token_ix]).await;
+        assert!(result.is_err());
+
+        assert_msg_present_in_logs(
+            result.unwrap_err(),
+            "failed: incorrect program id for instruction",
+        );
+    }
 
     let tx = ctx.send_solana_tx(&[link_token_ix]).await.unwrap();
     let call_contract_event = fetch_first_call_contract_event_from_tx(&tx);
@@ -776,7 +784,6 @@ async fn test_mint_burn_from_interchain_transfer_with_approval(
 
     // Make solana_wallet perform an interchain transfer from bob's account using approved amount
     let transfer_amount = 300;
-    let clock_sysvar = ctx.solana_chain.get_sysvar::<Clock>().await;
     let interchain_transfer_ix = axelar_solana_its::instruction::interchain_transfer(
         ctx.solana_wallet,
         bob_token_account,
@@ -787,7 +794,6 @@ async fn test_mint_burn_from_interchain_transfer_with_approval(
         solana_token,
         spl_token_2022::id(),
         0,
-        clock_sysvar.unix_timestamp,
     )?;
 
     let tx = ctx.send_solana_tx(&[interchain_transfer_ix]).await.unwrap();
@@ -905,7 +911,6 @@ async fn test_ata_must_match_pda_derivation(ctx: &mut ItsTestContext) -> anyhow:
             .await?;
     }
 
-    let clock_sysvar = ctx.solana_chain.get_sysvar::<Clock>().await;
     let mut transfer_ix = axelar_solana_its::instruction::interchain_transfer(
         ctx.solana_wallet,
         token_account,
@@ -916,12 +921,11 @@ async fn test_ata_must_match_pda_derivation(ctx: &mut ItsTestContext) -> anyhow:
         solana_token,
         spl_token_2022::id(),
         0,
-        clock_sysvar.unix_timestamp,
     )
     .unwrap();
 
     // Now inject an arbitrary ATA that does not match the token manager PDA
-    transfer_ix.accounts[4].pubkey = {
+    transfer_ix.accounts[5].pubkey = {
         let attacker_wallet = Keypair::new();
 
         // Fund the attacker wallet (for transaction fees)
@@ -953,6 +957,118 @@ async fn test_ata_must_match_pda_derivation(ctx: &mut ItsTestContext) -> anyhow:
         res.err().unwrap(),
         "Provided token_manager_ata doesn't match expected derivation",
     );
+
+    Ok(())
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_source_address_stays_consistent_through_the_transfer(
+    ctx: &mut ItsTestContext,
+) -> anyhow::Result<()> {
+    let salt = solana_sdk::keccak::hash(b"SourceAddressTestToken").0;
+    let deploy_local_ix = axelar_solana_its::instruction::deploy_interchain_token(
+        ctx.solana_wallet,
+        salt,
+        "Source Test Token".to_owned(),
+        "STT".to_owned(),
+        9,
+        1000,
+        Some(ctx.solana_wallet),
+    )?;
+
+    ctx.send_solana_tx(&[deploy_local_ix]).await.unwrap();
+
+    let token_id = axelar_solana_its::interchain_token_id(&ctx.solana_wallet, &salt);
+    let (its_root_pda, _) = axelar_solana_its::find_its_root_pda();
+    let (interchain_token_mint, _) =
+        axelar_solana_its::find_interchain_token_pda(&its_root_pda, &token_id);
+
+    // Get user's token account
+    let user_token_account = get_associated_token_address_with_program_id(
+        &ctx.solana_wallet,
+        &interchain_token_mint,
+        &spl_token_2022::id(),
+    );
+
+    // Perform interchain transfer to verify source_address
+    let transfer_amount = 50;
+    let destination_address = b"0x1234567890123456789012345678901234567890".to_vec();
+
+    let transfer_ix = axelar_solana_its::instruction::interchain_transfer(
+        ctx.solana_wallet,
+        user_token_account,
+        token_id,
+        ctx.evm_chain_name.clone(),
+        destination_address.clone(),
+        transfer_amount,
+        interchain_token_mint,
+        spl_token_2022::id(),
+        0,
+    )?;
+
+    let tx = ctx.send_solana_tx(&[transfer_ix]).await.unwrap();
+
+    // Extract the CallContract event to get the GMP payload first
+    let call_contract_event = fetch_first_call_contract_event_from_tx(&tx);
+
+    let gmp_payload = GMPPayload::decode(&call_contract_event.payload)?;
+
+    // Extract the InterchainTransfer event from logs
+    let logs = tx.metadata.unwrap().log_messages;
+    let transfer_event = logs
+        .iter()
+        .find_map(|log| InterchainTransfer::try_from_log(log).ok())
+        .expect("InterchainTransfer event should be present");
+
+    // Extract the InterchainTransfer from the GMP payload
+    let GMPPayload::SendToHub(send_to_hub) = gmp_payload else {
+        panic!("Expected SendToHub GMP payload, got: {gmp_payload:?}");
+    };
+
+    // The actual InterchainTransfer is in the inner payload
+    let inner_gmp_payload = GMPPayload::decode(&send_to_hub.payload)?;
+    let GMPPayload::InterchainTransfer(gmp_transfer) = inner_gmp_payload else {
+        panic!("Expected InterchainTransfer in inner payload, got: {inner_gmp_payload:?}");
+    };
+
+    // Both event and GMP payload should use the same source address
+    // and it should be the user's token account (not token manager ATA or mint)
+    assert_eq!(
+        transfer_event.source_address, ctx.solana_wallet,
+        "Event source_address should be the user's token account"
+    );
+
+    assert_eq!(
+        gmp_transfer.source_address.as_ref(),
+        ctx.solana_wallet.to_bytes(),
+        "GMP payload source_address should be the user's token account"
+    );
+
+    // Verify that the source address is NOT any system account
+    let (token_manager_pda, _) =
+        axelar_solana_its::find_token_manager_pda(&its_root_pda, &token_id);
+    let token_manager_ata = get_associated_token_address_with_program_id(
+        &token_manager_pda,
+        &interchain_token_mint,
+        &spl_token_2022::id(),
+    );
+
+    assert_ne!(
+        transfer_event.source_address, token_manager_ata,
+        "Source address should NOT be token manager ATA"
+    );
+
+    assert_ne!(
+        transfer_event.source_address, interchain_token_mint,
+        "Source address should NOT be the mint account"
+    );
+
+    // Additional verification: check other event fields
+    assert_eq!(transfer_event.token_id, token_id);
+    assert_eq!(transfer_event.destination_chain, ctx.evm_chain_name);
+    assert_eq!(transfer_event.destination_address, destination_address);
+    assert_eq!(transfer_event.amount, transfer_amount);
 
     Ok(())
 }

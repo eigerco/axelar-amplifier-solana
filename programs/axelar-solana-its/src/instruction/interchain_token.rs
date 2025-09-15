@@ -60,7 +60,7 @@ pub fn transfer_mintership(
 
     let accounts = vec![
         AccountMeta::new_readonly(its_root_pda, false),
-        AccountMeta::new_readonly(solana_program::system_program::id(), false),
+        AccountMeta::new_readonly(solana_sdk_ids::system_program::id(), false),
         AccountMeta::new(payer, true),
         AccountMeta::new(payer_roles_pda, false),
         AccountMeta::new_readonly(token_manager_pda, false),
@@ -98,7 +98,7 @@ pub fn propose_mintership(
 
     let accounts = vec![
         AccountMeta::new_readonly(its_root_pda, false),
-        AccountMeta::new_readonly(solana_program::system_program::id(), false),
+        AccountMeta::new_readonly(solana_sdk_ids::system_program::id(), false),
         AccountMeta::new(payer, true),
         AccountMeta::new_readonly(payer_roles_pda, false),
         AccountMeta::new_readonly(token_manager_pda, false),
@@ -138,11 +138,11 @@ pub fn accept_mintership(
 
     let accounts = vec![
         AccountMeta::new_readonly(its_root_pda, false),
-        AccountMeta::new_readonly(solana_program::system_program::id(), false),
+        AccountMeta::new_readonly(solana_sdk_ids::system_program::id(), false),
         AccountMeta::new(payer, true),
         AccountMeta::new(payer_roles_pda, false),
         AccountMeta::new_readonly(token_manager_pda, false),
-        AccountMeta::new_readonly(from, false),
+        AccountMeta::new(from, false),
         AccountMeta::new(origin_roles_pda, false),
         AccountMeta::new(proposal_pda, false),
     ];

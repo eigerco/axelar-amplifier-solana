@@ -142,6 +142,13 @@ pub(crate) fn process_deploy<'a>(
         return Err(ProgramError::InvalidArgument);
     }
 
+    if name.len() > mpl_token_metadata::MAX_NAME_LENGTH
+        || symbol.len() > mpl_token_metadata::MAX_SYMBOL_LENGTH
+    {
+        msg!("Name and/or symbol length too long");
+        return Err(ProgramError::InvalidArgument);
+    }
+
     event::InterchainTokenIdClaimed {
         token_id,
         deployer: *payer.key,
@@ -200,12 +207,18 @@ pub(crate) fn process_inbound_deploy<'a>(
         token_manager_pda_bump,
         initial_supply,
     )?;
+
+    let mut truncated_name = name;
+    let mut truncated_symbol = symbol;
+    truncated_name.truncate(mpl_token_metadata::MAX_NAME_LENGTH);
+    truncated_symbol.truncate(mpl_token_metadata::MAX_SYMBOL_LENGTH);
+
     setup_metadata(
         payer,
         &accounts,
         &token_id,
-        name.clone(),
-        symbol.clone(),
+        truncated_name.clone(),
+        truncated_symbol.clone(),
         String::new(),
         token_manager_pda_bump,
     )?;
@@ -236,8 +249,8 @@ pub(crate) fn process_inbound_deploy<'a>(
             .operator
             .map(|account| *account.key)
             .unwrap_or_default(),
-        name,
-        symbol,
+        name: truncated_name,
+        symbol: truncated_symbol,
         decimals,
     }
     .emit();
@@ -335,6 +348,13 @@ pub(crate) fn process_outbound_deploy<'a>(
 
     let (_other, outbound_message_accounts) = accounts.split_at(outbound_message_accounts_index);
     let gmp_accounts = GmpAccounts::from_account_info_slice(outbound_message_accounts, &())?;
+    let its_root_config = InterchainTokenService::load(gmp_accounts.its_root_account)?;
+    assert_valid_its_root_pda(gmp_accounts.its_root_account, its_root_config.bump)?;
+    if destination_chain == its_root_config.chain_name {
+        msg!("Cannot deploy remotely to the origin chain");
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
     msg!("Instruction: OutboundDeploy");
 
     // Get metadata with fallback logic (Token 2022 extensions first, then Metaplex)
@@ -389,7 +409,6 @@ pub(crate) fn process_outbound_deploy<'a>(
         destination_chain.clone(),
         gas_value,
         signing_pda_bump,
-        None,
         true,
     )?;
 
@@ -473,6 +492,9 @@ pub(crate) fn process_mint<'a>(accounts: &'a [AccountInfo<'a>], amount: u64) -> 
     if token_manager.token_address.as_ref() != mint.key.as_ref() {
         return Err(ProgramError::InvalidAccountData);
     }
+
+    spl_token_2022::check_spl_token_program_account(token_program.key)?;
+
     if mint.owner != token_program.key {
         return Err(ProgramError::IncorrectProgramId);
     }
@@ -728,7 +750,7 @@ pub(crate) fn revoke_deploy_remote_interchain_token(
     }
     .emit();
 
-    program_utils::pda::close_pda(payer, deploy_approval_account)
+    program_utils::pda::close_pda(payer, deploy_approval_account, &crate::id())
 }
 
 pub(crate) fn use_deploy_approval(
@@ -752,7 +774,7 @@ pub(crate) fn use_deploy_approval(
         return Err(ProgramError::InvalidArgument);
     }
 
-    program_utils::pda::close_pda(minter, deploy_approval_account)
+    program_utils::pda::close_pda(minter, deploy_approval_account, &crate::id())
 }
 
 pub(crate) fn process_transfer_mintership<'a>(accounts: &'a [AccountInfo<'a>]) -> ProgramResult {
@@ -847,12 +869,7 @@ pub(crate) fn process_propose_mintership<'a>(accounts: &'a [AccountInfo<'a>]) ->
         proposal_account,
     };
 
-    role_management::processor::propose(
-        &crate::id(),
-        role_management_accounts,
-        Roles::MINTER,
-        Roles::MINTER,
-    )
+    role_management::processor::propose(&crate::id(), role_management_accounts, Roles::MINTER)
 }
 
 pub(crate) fn process_accept_mintership<'a>(accounts: &'a [AccountInfo<'a>]) -> ProgramResult {
@@ -891,10 +908,5 @@ pub(crate) fn process_accept_mintership<'a>(accounts: &'a [AccountInfo<'a>]) -> 
         proposal_account,
     };
 
-    role_management::processor::accept(
-        &crate::id(),
-        role_management_accounts,
-        Roles::MINTER,
-        Roles::empty(),
-    )
+    role_management::processor::accept(&crate::id(), role_management_accounts, Roles::MINTER)
 }

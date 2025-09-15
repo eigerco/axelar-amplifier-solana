@@ -13,9 +13,10 @@ use role_management::processor::{
 use role_management::state::UserRoles;
 use solana_program::account_info::{next_account_info, AccountInfo};
 use solana_program::entrypoint::ProgramResult;
+use solana_program::msg;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
-use solana_program::{msg, system_program};
+use solana_sdk_ids::system_program;
 use token_manager::{handover_mint_authority, SetFlowLimitAccounts};
 
 use crate::instruction::InterchainTokenServiceInstruction;
@@ -153,7 +154,6 @@ pub fn process_instruction<'a>(
             gas_value,
             signing_pda_bump,
             None,
-            None,
         ),
         InterchainTokenServiceInstruction::RegisterTokenMetadata {
             gas_value,
@@ -257,26 +257,6 @@ pub fn process_instruction<'a>(
             gas_value,
             signing_pda_bump,
             Some(data),
-            None,
-        ),
-        InterchainTokenServiceInstruction::CallContractWithInterchainTokenOffchainData {
-            token_id,
-            destination_chain,
-            destination_address,
-            amount,
-            payload_hash,
-            gas_value,
-            signing_pda_bump,
-        } => interchain_transfer::process_outbound_transfer(
-            accounts,
-            token_id,
-            destination_chain,
-            destination_address,
-            amount,
-            gas_value,
-            signing_pda_bump,
-            None,
-            Some(payload_hash),
         ),
     }
 }
@@ -415,12 +395,7 @@ fn process_propose_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -> ProgramR
         proposal_account,
     };
 
-    role_management::processor::propose(
-        &crate::id(),
-        role_management_accounts,
-        Roles::OPERATOR,
-        Roles::OPERATOR,
-    )
+    role_management::processor::propose(&crate::id(), role_management_accounts, Roles::OPERATOR)
 }
 
 fn process_accept_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -> ProgramResult {
@@ -447,12 +422,7 @@ fn process_accept_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -> ProgramRe
         proposal_account,
     };
 
-    role_management::processor::accept(
-        &crate::id(),
-        role_management_accounts,
-        Roles::OPERATOR,
-        Roles::empty(),
-    )
+    role_management::processor::accept(&crate::id(), role_management_accounts, Roles::OPERATOR)
 }
 
 fn process_set_pause_status<'a>(accounts: &'a [AccountInfo<'a>], paused: bool) -> ProgramResult {

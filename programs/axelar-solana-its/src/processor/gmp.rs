@@ -6,20 +6,21 @@ use interchain_token_transfer_gmp::{GMPPayload, SendToHub};
 use itertools::{self, Itertools};
 use program_utils::{pda::BorshPda, validate_system_account_key};
 use solana_program::account_info::{next_account_info, AccountInfo};
-use solana_program::clock::Clock;
 use solana_program::entrypoint::ProgramResult;
 use solana_program::msg;
 use solana_program::program::invoke;
 use solana_program::program::invoke_signed;
 use solana_program::program_error::ProgramError;
-use solana_program::sysvar::Sysvar;
 
 use crate::processor::interchain_token::{self, DeployInterchainTokenAccounts};
 use crate::processor::interchain_transfer::process_inbound_transfer;
 use crate::processor::link_token;
 use crate::state::token_manager::TokenManager;
 use crate::state::InterchainTokenService;
-use crate::{assert_its_not_paused, assert_valid_its_root_pda, Validate, ITS_HUB_CHAIN_NAME};
+use crate::{
+    assert_its_not_paused, assert_valid_its_root_pda, check_program_account, Validate,
+    ITS_HUB_CHAIN_NAME,
+};
 use crate::{instruction, FromAccountInfoSlice};
 
 pub(crate) fn process_inbound<'a>(
@@ -155,12 +156,14 @@ pub(crate) fn process_outbound<'a>(
     destination_chain: String,
     gas_value: u64,
     signing_pda_bump: u8,
-    payload_hash: Option<[u8; 32]>,
     wrapped: bool,
 ) -> ProgramResult {
     let its_root_config = InterchainTokenService::load(accounts.its_root_account)?;
     assert_valid_its_root_pda(accounts.its_root_account, its_root_config.bump)?;
     assert_its_not_paused(&its_root_config)?;
+
+    check_program_account(*accounts.program_account.key)?;
+
     if !its_root_config.is_trusted_chain(&destination_chain)
         && destination_chain != ITS_HUB_CHAIN_NAME
     {
@@ -176,45 +179,29 @@ pub(crate) fn process_outbound<'a>(
         return Err(ProgramError::InvalidAccountData);
     }
 
-    let (payload_hash, call_contract_ix) = if let Some(payload_hash) = payload_hash {
-        let ix = axelar_solana_gateway::instructions::call_contract_offchain_data(
-            axelar_solana_gateway::id(),
-            *accounts.gateway_root_account.key,
-            crate::ID,
-            Some((signing_pda, signing_pda_bump)),
-            crate::ITS_HUB_CHAIN_NAME.to_owned(),
-            its_root_config.its_hub_address.clone(),
-            payload_hash,
-        )?;
-
-        (payload_hash, ix)
+    let payload = if wrapped {
+        GMPPayload::SendToHub(SendToHub {
+            selector: SendToHub::MESSAGE_TYPE_ID
+                .try_into()
+                .map_err(|_err| ProgramError::ArithmeticOverflow)?,
+            destination_chain,
+            payload: payload.encode().into(),
+        })
+        .encode()
     } else {
-        let payload = if wrapped {
-            GMPPayload::SendToHub(SendToHub {
-                selector: SendToHub::MESSAGE_TYPE_ID
-                    .try_into()
-                    .map_err(|_err| ProgramError::ArithmeticOverflow)?,
-                destination_chain,
-                payload: payload.encode().into(),
-            })
-            .encode()
-        } else {
-            payload.encode()
-        };
-
-        let payload_hash = solana_program::keccak::hashv(&[&payload]).to_bytes();
-        let ix = axelar_solana_gateway::instructions::call_contract(
-            axelar_solana_gateway::id(),
-            *accounts.gateway_root_account.key,
-            crate::ID,
-            Some((signing_pda, signing_pda_bump)),
-            crate::ITS_HUB_CHAIN_NAME.to_owned(),
-            its_root_config.its_hub_address.clone(),
-            payload,
-        )?;
-
-        (payload_hash, ix)
+        payload.encode()
     };
+
+    let payload_hash = solana_program::keccak::hashv(&[&payload]).to_bytes();
+    let call_contract_ix = axelar_solana_gateway::instructions::call_contract(
+        axelar_solana_gateway::id(),
+        *accounts.gateway_root_account.key,
+        crate::ID,
+        Some((signing_pda, signing_pda_bump)),
+        crate::ITS_HUB_CHAIN_NAME.to_owned(),
+        its_root_config.its_hub_address.clone(),
+        payload,
+    )?;
 
     if gas_value > 0 {
         pay_gas(
@@ -290,12 +277,8 @@ fn validate_its_accounts(accounts: &[AccountInfo<'_>], payload: &GMPPayload) -> 
         .map(|account| *account.key)
         .ok_or(ProgramError::InvalidAccountData)?;
 
-    let derived_its_accounts = instruction::derive_its_accounts(
-        payload,
-        token_program,
-        maybe_mint,
-        Some(Clock::get()?.unix_timestamp),
-    )?;
+    let derived_its_accounts =
+        instruction::derive_its_accounts(payload, token_program, maybe_mint)?;
 
     for element in accounts.iter().zip_longest(derived_its_accounts.iter()) {
         match element {

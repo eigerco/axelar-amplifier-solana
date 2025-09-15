@@ -20,9 +20,7 @@ use crate::state::InterchainTokenService;
 /// 2. [] The token program (spl-token or spl-token-2022).
 /// 3. [writable] The token mint.
 /// 4. [writable] The Destination Program Associated Token Account.
-/// 5. [] The Metaplex Metadata Program account.
-/// 6. [writable] The Metaplex Metadata account associated with the mint.
-pub const PROGRAM_ACCOUNTS_START_INDEX: usize = 7;
+pub const PROGRAM_ACCOUNTS_START_INDEX: usize = 5;
 
 /// This is the payload that the `executeWithInterchainToken` processor on the destinatoin program
 /// must expect
@@ -36,7 +34,7 @@ pub struct AxelarInterchainTokenExecutablePayload {
     pub source_chain: String,
 
     /// The source address of the token transfer.
-    pub source_address: String,
+    pub source_address: Vec<u8>,
 
     /// The program instruction data.
     pub data: Vec<u8>,

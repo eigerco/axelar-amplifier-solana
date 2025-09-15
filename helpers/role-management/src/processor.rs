@@ -5,6 +5,7 @@ use solana_program::bpf_loader_upgradeable::UpgradeableLoaderState;
 use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
+#[allow(deprecated)]
 use solana_program::{bpf_loader_upgradeable, msg};
 
 use crate::seed_prefixes;
@@ -19,14 +20,13 @@ pub fn propose<F: RolesFlags>(
     program_id: &Pubkey,
     accounts: RoleTransferWithProposalAccounts<'_>,
     roles: F,
-    required_payer_roles: F,
 ) -> ProgramResult {
     ensure_signer_roles(
         program_id,
         accounts.resource,
         accounts.payer,
         accounts.payer_roles_account,
-        required_payer_roles,
+        roles,
     )?;
 
     ensure_roles(
@@ -87,7 +87,6 @@ pub fn accept<F: RolesFlags>(
     program_id: &Pubkey,
     accounts: RoleTransferWithProposalAccounts<'_>,
     roles: F,
-    required_payer_roles: F,
 ) -> ProgramResult {
     let proposal_pda_bump = RoleProposal::<F>::load(accounts.proposal_account)?.bump;
     let (derived_proposal_pda, _) = crate::create_roles_proposal_pda(
@@ -113,15 +112,10 @@ pub fn accept<F: RolesFlags>(
     let role_remove_accounts = RoleRemoveAccounts::from(accounts);
     let role_add_accounts = RoleAddAccounts::from(accounts);
 
-    add(program_id, role_add_accounts, roles, required_payer_roles)?;
-    remove(
-        program_id,
-        role_remove_accounts,
-        roles,
-        required_payer_roles,
-    )?;
+    add(program_id, role_add_accounts, roles, F::empty())?;
+    remove(program_id, role_remove_accounts, roles, F::empty())?;
 
-    close_pda(accounts.origin_user_account, proposal_account)?;
+    close_pda(accounts.origin_user_account, proposal_account, program_id)?;
 
     Ok(())
 }
@@ -209,11 +203,12 @@ pub fn remove<F: RolesFlags>(
         required_payer_roles,
     )?;
 
-    ensure_proper_account::<F>(
+    ensure_roles(
         program_id,
         accounts.resource,
         accounts.origin_user_account,
         accounts.origin_roles_account,
+        roles,
     )?;
 
     if let Ok(mut destination_user_roles) = UserRoles::load(accounts.origin_roles_account) {
@@ -426,6 +421,7 @@ mod tests {
 
     use bitflags::bitflags;
     use core::ops::Not;
+    #[allow(deprecated)]
     use solana_program::{
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         pubkey::Pubkey,

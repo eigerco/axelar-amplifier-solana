@@ -9,7 +9,7 @@ edition.workspace = true
 
 [dependencies]
 event-utils.workspace = true
-solana-program.workspace = true
+anchor-lang.workspace = true
 
 [lints]
 workspace = true

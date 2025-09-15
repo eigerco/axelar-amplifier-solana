@@ -5,6 +5,7 @@ use core::fmt::Debug;
 use axelar_solana_encoding::types::execute_data::{MerkleisedMessage, SigningVerifierSetInfo};
 use axelar_solana_encoding::types::messages::Message;
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
+#[allow(deprecated)]
 use solana_program::bpf_loader_upgradeable;
 use solana_program::instruction::{AccountMeta, Instruction};
 use solana_program::program_error::ProgramError;
@@ -61,24 +62,6 @@ pub enum GatewayInstruction {
         destination_contract_address: String,
         /// Contract call data.
         payload: Vec<u8>,
-        /// The pda bump for the signing PDA
-        signing_pda_bump: u8,
-    },
-
-    /// Represents the `CallContract` Axelar event. The contract call data is expected to be
-    /// handled off-chain by uploading the data using the relayer API.
-    ///
-    /// Accounts expected by this instruction:
-    /// 0. [] Sender (origin) of the message, program id
-    /// 1. [SIGNER] PDA created by the `sender`, works as authorization token for a given program id
-    /// 2. [] Gateway Root Config PDA account
-    CallContractOffchainData {
-        /// The name of the target blockchain.
-        destination_chain: String,
-        /// The address of the target contract in the destination blockchain.
-        destination_contract_address: String,
-        /// Hash of the contract call data, to be uploaded off-chain through the relayer API.
-        payload_hash: [u8; 32],
         /// The pda bump for the signing PDA
         signing_pda_bump: u8,
     },
@@ -341,44 +324,6 @@ pub fn call_contract(
         destination_chain,
         destination_contract_address,
         payload,
-        signing_pda_bump: sender_call_contract_pda.map_or(0, |(_, bump)| bump),
-    })?;
-
-    let accounts = vec![
-        AccountMeta::new_readonly(sender, sender_call_contract_pda.is_none()),
-        AccountMeta::new_readonly(
-            sender_call_contract_pda.map_or(crate::ID, |(pda, _)| pda),
-            sender_call_contract_pda.is_some(),
-        ),
-        AccountMeta::new_readonly(gateway_root_pda, false),
-    ];
-
-    Ok(Instruction {
-        program_id: gateway_program_id,
-        accounts,
-        data,
-    })
-}
-
-/// Creates a [`CallContractOffchainData`] instruction.
-///
-/// # Errors
-///
-/// Returns a [`ProgramError::BorshIoError`] if the instruction serialization fails.
-#[allow(clippy::too_many_arguments)]
-pub fn call_contract_offchain_data(
-    gateway_program_id: Pubkey,
-    gateway_root_pda: Pubkey,
-    sender: Pubkey,
-    sender_call_contract_pda: Option<(Pubkey, u8)>,
-    destination_chain: String,
-    destination_contract_address: String,
-    payload_hash: [u8; 32],
-) -> Result<Instruction, ProgramError> {
-    let data = to_vec(&GatewayInstruction::CallContractOffchainData {
-        destination_chain,
-        destination_contract_address,
-        payload_hash,
         signing_pda_bump: sender_call_contract_pda.map_or(0, |(_, bump)| bump),
     })?;
 

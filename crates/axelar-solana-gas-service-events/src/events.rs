@@ -1,6 +1,8 @@
 //! Events emitted by the Axelar Solana Gas service
 
-use solana_program::pubkey::Pubkey;
+use anchor_lang::prelude::{
+    borsh, event, AnchorDeserialize, AnchorSerialize, Discriminator, Pubkey,
+};
 
 use event_utils::{read_array, read_string, read_u64, EventParseError};
 
@@ -22,6 +24,7 @@ pub enum GasServiceEvent {
 }
 
 /// Represents the event emitted when native gas is paid for a contract call.
+#[event]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NativeGasPaidForContractCallEvent {
     /// The Gas service config PDA
@@ -92,6 +95,7 @@ impl NativeGasPaidForContractCallEvent {
 }
 
 /// Represents the event emitted when native gas is added.
+#[event]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NativeGasAddedEvent {
     /// The Gas service config PDA
@@ -147,6 +151,7 @@ impl NativeGasAddedEvent {
 }
 
 /// Represents the event emitted when native gas is refunded.
+#[event]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NativeGasRefundedEvent {
     /// Solana transaction signature
@@ -199,6 +204,7 @@ impl NativeGasRefundedEvent {
 }
 
 /// Represents the event emitted when native gas is paid for a contract call.
+#[event]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SplGasPaidForContractCallEvent {
     /// The Gas service config PDA
@@ -293,6 +299,7 @@ impl SplGasPaidForContractCallEvent {
 }
 
 /// Represents the event emitted when native gas is added.
+#[event]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SplGasAddedEvent {
     /// The Gas service config PDA
@@ -372,6 +379,7 @@ impl SplGasAddedEvent {
 }
 
 /// Represents the event emitted when native gas is refunded.
+#[event]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SplGasRefundedEvent {
     /// The Gas service config associated token account PDA

@@ -8,8 +8,8 @@ use solana_program::entrypoint::ProgramResult;
 use solana_program::msg;
 use solana_program::program::set_return_data;
 use solana_program::program_error::ProgramError;
-use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
+use spl_token_2022::extension::{BaseStateWithExtensions, ExtensionType, StateWithExtensions};
 use spl_token_2022::state::Mint;
 
 use crate::processor::gmp::{self, GmpAccounts};
@@ -84,6 +84,13 @@ pub(crate) fn process_outbound<'a>(
         accounts.split_at(OUTBOUND_MESSAGE_ACCOUNTS_IDX);
     let gmp_accounts = GmpAccounts::from_account_info_slice(outbound_message_accounts, &())?;
 
+    let its_root_config = InterchainTokenService::load(gmp_accounts.its_root_account)?;
+    assert_valid_its_root_pda(gmp_accounts.its_root_account, its_root_config.bump)?;
+    if destination_chain == its_root_config.chain_name {
+        msg!("Cannot link to another token on the same chain");
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
     let accounts_iter = &mut link_token_accounts.iter();
     let payer = next_account_info(accounts_iter)?;
     let token_manager_account = next_account_info(accounts_iter)?;
@@ -141,7 +148,6 @@ pub(crate) fn process_outbound<'a>(
         link_started_event.destination_chain,
         gas_value,
         signing_pda_bump,
-        None,
         true,
     )?;
 
@@ -155,35 +161,29 @@ pub(crate) fn register_token_metadata<'a>(
     gas_value: u64,
     signing_pda_bump: u8,
 ) -> ProgramResult {
-    const OUTBOUND_MESSAGE_ACCOUNTS_IDX: usize = 3;
+    const OUTBOUND_MESSAGE_ACCOUNTS_IDX: usize = 2;
 
     let accounts_iter = &mut accounts.iter();
     let payer = next_account_info(accounts_iter)?;
     let mint_account = next_account_info(accounts_iter)?;
-    let token_program = next_account_info(accounts_iter)?;
 
     let (_other, outbound_message_accounts) = accounts.split_at(OUTBOUND_MESSAGE_ACCOUNTS_IDX);
     let gmp_accounts = GmpAccounts::from_account_info_slice(outbound_message_accounts, &())?;
     msg!("Instruction: RegisterTokenMetadata");
 
-    spl_token_2022::check_spl_token_program_account(token_program.key)?;
-    if mint_account.owner != token_program.key {
-        msg!("Invalid mint account");
-        return Err(ProgramError::InvalidAccountData);
-    }
-
-    let mint = Mint::unpack(&mint_account.data.borrow())?;
+    let mint_data = mint_account.try_borrow_data()?;
+    let mint = StateWithExtensions::<Mint>::unpack(&mint_data)?;
     let payload = GMPPayload::RegisterTokenMetadata(RegisterTokenMetadata {
         selector: RegisterTokenMetadata::MESSAGE_TYPE_ID
             .try_into()
             .map_err(|_err| ProgramError::ArithmeticOverflow)?,
         token_address: mint_account.key.to_bytes().into(),
-        decimals: mint.decimals,
+        decimals: mint.base.decimals,
     });
 
     event::TokenMetadataRegistered {
         token_address: *mint_account.key,
-        decimals: mint.decimals,
+        decimals: mint.base.decimals,
     }
     .emit();
 
@@ -194,7 +194,6 @@ pub(crate) fn register_token_metadata<'a>(
         crate::ITS_HUB_CHAIN_NAME.to_owned(),
         gas_value,
         signing_pda_bump,
-        None,
         false,
     )
 }
@@ -254,6 +253,11 @@ fn register_token<'a>(
     let its_config = InterchainTokenService::load(parsed_accounts.its_root_pda)?;
     assert_valid_its_root_pda(parsed_accounts.its_root_pda, its_config.bump)?;
     assert_its_not_paused(&its_config)?;
+    let mint_data = parsed_accounts.token_mint.try_borrow_data()?;
+    let mint = StateWithExtensions::<Mint>::unpack(&mint_data)?;
+    let has_fee_extension = mint
+        .get_extension_types()?
+        .contains(&ExtensionType::TransferFeeConfig);
 
     let (token_manager_type, operator, deploy_salt) = match *registration {
         TokenRegistration::Canonical => {
@@ -265,8 +269,14 @@ fn register_token<'a>(
                 return Err(ProgramError::InvalidAccountData);
             }
 
+            let token_manager_type = if has_fee_extension {
+                token_manager::Type::LockUnlockFee
+            } else {
+                token_manager::Type::LockUnlock
+            };
+
             (
-                token_manager::Type::LockUnlock,
+                token_manager_type,
                 None,
                 crate::canonical_interchain_token_deploy_salt(parsed_accounts.token_mint.key),
             )

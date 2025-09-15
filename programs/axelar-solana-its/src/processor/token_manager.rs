@@ -11,12 +11,13 @@ use role_management::processor::{
 use role_management::state::UserRoles;
 use solana_program::account_info::{next_account_info, AccountInfo};
 use solana_program::entrypoint::ProgramResult;
+use solana_program::msg;
 use solana_program::program::invoke;
 use solana_program::program_error::ProgramError;
 use solana_program::program_option::COption;
 use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
-use solana_program::{msg, system_program};
+use solana_sdk_ids::system_program;
 use spl_token_2022::check_spl_token_program_account;
 use spl_token_2022::extension::{BaseStateWithExtensions, ExtensionType, StateWithExtensions};
 use spl_token_2022::instruction::AuthorityType;
@@ -40,7 +41,7 @@ pub(crate) fn set_flow_limit(
     )?;
 
     let mut token_manager = TokenManager::load(accounts.token_manager_pda)?;
-    token_manager.flow_limit = flow_limit;
+    token_manager.flow_slot.flow_limit = flow_limit;
     token_manager.store(
         accounts.flow_limiter,
         accounts.token_manager_pda,
@@ -251,17 +252,21 @@ pub(crate) fn validate_mint_extensions(
     let mint_data = token_mint.try_borrow_data()?;
     let mint = StateWithExtensions::<Mint>::unpack(&mint_data)?;
 
-    if ty == token_manager::Type::LockUnlockFee
-        && !mint
-            .get_extension_types()?
-            .contains(&ExtensionType::TransferFeeConfig)
-    {
-        msg!("The mint is not compatible with the LockUnlockFee TokenManager type, please make sure the mint has the TransferFeeConfig extension initialized");
-        return Err(ProgramError::InvalidAccountData);
+    if matches!(
+        (
+            ty,
+            mint.get_extension_types()?
+                .contains(&ExtensionType::TransferFeeConfig)
+        ),
+        (token_manager::Type::LockUnlock, true) | (token_manager::Type::LockUnlockFee, false)
+    ) {
+        msg!("The mint is not compatible with the type");
+        return Err(ProgramError::InvalidInstructionData);
     }
 
     Ok(())
 }
+
 pub(crate) fn validate_token_manager_type(
     ty: token_manager::Type,
     token_mint: &AccountInfo<'_>,
@@ -461,6 +466,9 @@ impl<'a> FromAccountInfoSlice<'a> for SetFlowLimitAccounts<'a> {
 impl Validate for SetFlowLimitAccounts<'_> {
     fn validate(&self) -> Result<(), ProgramError> {
         validate_system_account_key(self.system_account.key)?;
+
+        let its_config_account = InterchainTokenService::load(self.its_root_pda)?;
+        assert_valid_its_root_pda(self.its_root_pda, its_config_account.bump)?;
         Ok(())
     }
 }
@@ -647,12 +655,7 @@ pub(crate) fn process_propose_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) 
         token_manager.bump,
     )?;
 
-    role_management::processor::propose(
-        &crate::id(),
-        role_management_accounts,
-        Roles::OPERATOR,
-        Roles::OPERATOR,
-    )
+    role_management::processor::propose(&crate::id(), role_management_accounts, Roles::OPERATOR)
 }
 
 pub(crate) fn process_accept_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -> ProgramResult {
@@ -690,10 +693,5 @@ pub(crate) fn process_accept_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -
         token_manager.bump,
     )?;
 
-    role_management::processor::accept(
-        &crate::id(),
-        role_management_accounts,
-        Roles::OPERATOR,
-        Roles::empty(),
-    )
+    role_management::processor::accept(&crate::id(), role_management_accounts, Roles::OPERATOR)
 }

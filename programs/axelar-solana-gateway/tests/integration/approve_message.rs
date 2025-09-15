@@ -1,6 +1,6 @@
 use core::str::FromStr;
 
-use axelar_solana_encoding::hasher::SolanaSyscallHasher;
+use axelar_solana_encoding::hasher::NativeHasher;
 use axelar_solana_encoding::types::execute_data::{MerkleisedMessage, MerkleisedPayload};
 use axelar_solana_encoding::types::messages::Messages;
 use axelar_solana_encoding::types::payload::Payload;
@@ -41,7 +41,7 @@ async fn successfully_approves_messages() {
         unreachable!()
     };
     for message_info in messages {
-        let hash = message_info.leaf.message.hash::<SolanaSyscallHasher>();
+        let hash = message_info.leaf.message.hash::<NativeHasher>();
         let command_id = command_id(
             &message_info.leaf.message.cc_id.chain,
             &message_info.leaf.message.cc_id.id,
@@ -138,7 +138,7 @@ async fn fail_individual_approval_if_done_many_times() {
     let mut events_counter = 0;
     let mut message_counter = 0;
     for message_info in merkle_messages_batch_two {
-        let hash = message_info.leaf.message.hash::<SolanaSyscallHasher>();
+        let hash = message_info.leaf.message.hash::<NativeHasher>();
         let tx = metadata
             .approve_message(
                 execute_data_batch_two.payload_merkle_root,

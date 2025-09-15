@@ -1,5 +1,6 @@
 use axelar_solana_encoding::hasher::SolanaSyscallHasher;
 use axelar_solana_encoding::types::execute_data::MerkleisedMessage;
+use axelar_solana_encoding::types::verifier_set::construct_payload_hash;
 use axelar_solana_encoding::{rs_merkle, LeafHash};
 use core::str::FromStr;
 use program_utils::{
@@ -9,6 +10,7 @@ use program_utils::{
 use solana_program::account_info::{next_account_info, AccountInfo};
 use solana_program::entrypoint::ProgramResult;
 use solana_program::log::sol_log_data;
+use solana_program::msg;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 
@@ -77,11 +79,17 @@ impl Processor {
 
         // Check: Verification session PDA is initialized.
         verification_session_account.check_initialized_pda_without_deserialization(program_id)?;
-        let data = verification_session_account.try_borrow_data()?;
-        let session = SignatureVerificationSessionData::read(&data)
+        let session_data = verification_session_account.try_borrow_data()?;
+        let session = SignatureVerificationSessionData::read(&session_data)
             .ok_or(GatewayError::BytemuckDataLenInvalid)?;
+        // Construct the payload hash using the stored signing verifier set hash
+        let payload_hash = construct_payload_hash::<SolanaSyscallHasher>(
+            payload_merkle_root,
+            session.signature_verification.signing_verifier_set_hash,
+        );
+
         assert_valid_signature_verification_pda(
-            &payload_merkle_root,
+            &payload_hash,
             session.bump,
             verification_session_account.key,
         )?;
@@ -108,7 +116,6 @@ impl Processor {
             return Err(GatewayError::InvalidDomainSeparator.into());
         }
 
-        let leaf_hash = message.leaf.hash::<SolanaSyscallHasher>();
         let message_hash = message.leaf.message.hash::<SolanaSyscallHasher>();
         let proof = rs_merkle::MerkleProof::<SolanaSyscallHasher>::from_bytes(&message.proof)
             .map_err(|_err| GatewayError::InvalidMerkleProof)?;
@@ -117,7 +124,7 @@ impl Processor {
         if !proof.verify(
             payload_merkle_root,
             &[message.leaf.position.into()],
-            &[leaf_hash],
+            &[message.leaf.hash::<SolanaSyscallHasher>()],
             message.leaf.set_size.into(),
         ) {
             return Err(GatewayError::LeafNodeNotPartOfMerkleRoot.into());
@@ -125,8 +132,7 @@ impl Processor {
 
         // crate a PDA where we write the message metadata contents
         let message = message.leaf.message;
-        let cc_id = message.cc_id;
-        let command_id = command_id(&cc_id.chain, &cc_id.id);
+        let command_id = command_id(&message.cc_id.chain, &message.cc_id.id);
 
         let (_, incoming_message_pda_bump) = get_incoming_message_pda(&command_id);
         assert_valid_incoming_message_pda(
@@ -145,8 +151,8 @@ impl Processor {
             incoming_message_pda,
             program_id,
             system_program,
-            IncomingMessage::LEN.try_into().map_err(|_err| {
-                solana_program::msg!("unexpected u64 overflow in struct size");
+            IncomingMessage::LEN.try_into().map_err(|_| {
+                msg!("unexpected u64 overflow in struct size");
                 ProgramError::ArithmeticOverflow
             })?,
             seeds,
@@ -161,10 +167,8 @@ impl Processor {
             get_validate_message_signing_pda(destination_address, command_id);
 
         // Persist a new incoming message with "in progress" status in the PDA data.
-        let mut data = incoming_message_pda.try_borrow_mut_data()?;
-        let incoming_message_data =
-            IncomingMessage::read_mut(&mut data).ok_or(GatewayError::BytemuckDataLenInvalid)?;
-        *incoming_message_data = IncomingMessage::new(
+        *IncomingMessage::read_mut(&mut incoming_message_pda.try_borrow_mut_data()?)
+            .ok_or(GatewayError::BytemuckDataLenInvalid)? = IncomingMessage::new(
             incoming_message_pda_bump,
             signing_pda_bump,
             MessageStatus::approved(),
@@ -178,8 +182,8 @@ impl Processor {
             &command_id,
             &destination_address.to_bytes(),
             &message.payload_hash,
-            cc_id.chain.as_bytes(),
-            cc_id.id.as_bytes(),
+            message.cc_id.chain.as_bytes(),
+            message.cc_id.id.as_bytes(),
             message.source_address.as_bytes(),
             message.destination_chain.as_bytes(),
         ]);

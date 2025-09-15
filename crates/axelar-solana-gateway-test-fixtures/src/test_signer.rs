@@ -53,9 +53,15 @@ impl SigningVerifierSet {
     /// Get the verifier set tracket PDA and bump
     #[must_use]
     pub fn verifier_set_tracker(&self) -> (Pubkey, u8) {
-        let hash = verifier_set_hash::<NativeHasher>(&self.verifier_set(), &self.domain_separator)
-            .unwrap();
+        let hash = self.verifier_set_hash();
         axelar_solana_gateway::get_verifier_set_tracker_pda(hash)
+    }
+
+    /// Calculate the hash of this verifier set
+    #[must_use]
+    pub fn verifier_set_hash(&self) -> [u8; 32] {
+        verifier_set_hash::<NativeHasher>(&self.verifier_set(), &self.domain_separator)
+            .expect("hashing should not fail")
     }
 
     /// Transform into the verifier set that the gateway expects to operate on

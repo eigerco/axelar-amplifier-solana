@@ -10,7 +10,9 @@ use axelar_solana_encoding::types::execute_data::{
 };
 use axelar_solana_encoding::types::messages::{CrossChainId, Message, Messages};
 use axelar_solana_encoding::types::payload::Payload;
-use axelar_solana_encoding::types::verifier_set::{verifier_set_hash, VerifierSet};
+use axelar_solana_encoding::types::verifier_set::{
+    construct_payload_hash, verifier_set_hash, VerifierSet,
+};
 use axelar_solana_encoding::{borsh, hash_payload};
 use axelar_solana_gateway::error::GatewayError;
 use axelar_solana_gateway::instructions::InitialVerifierSet;
@@ -21,8 +23,8 @@ use axelar_solana_gateway::state::signature_verification_pda::SignatureVerificat
 use axelar_solana_gateway::state::verifier_set_tracker::VerifierSetTracker;
 use axelar_solana_gateway::state::GatewayConfig;
 use axelar_solana_gateway::{
-    get_gateway_root_config_pda, get_incoming_message_pda, get_verifier_set_tracker_pda,
-    BytemuckedPda,
+    get_gateway_root_config_pda, get_incoming_message_pda, get_signature_verification_pda,
+    get_verifier_set_tracker_pda, BytemuckedPda,
 };
 pub use gateway_event_stack::{MatchContext, ProgramInvocationState};
 use rand::Rng as _;
@@ -131,6 +133,7 @@ impl SolanaAxelarIntegrationMetadata {
             self.payer.pubkey(),
             self.gateway_root_pda,
             execute_data.payload_merkle_root,
+            execute_data.signing_verifier_set_merkle_root,
         )
         .unwrap();
         self.fixture.send_tx(&[ix]).await
@@ -154,6 +157,7 @@ impl SolanaAxelarIntegrationMetadata {
                 gateway_config_pda,
                 verifier_set_tracker_pda,
                 execute_data.payload_merkle_root,
+                execute_data.signing_verifier_set_merkle_root,
                 signature_leaves.clone(),
             )
             .unwrap();
@@ -167,9 +171,12 @@ impl SolanaAxelarIntegrationMetadata {
         }
 
         // Check that the PDA contains the expected data
-        let (verification_pda, _bump) = axelar_solana_gateway::get_signature_verification_pda(
-            &execute_data.payload_merkle_root,
+        // Use the same derivation as the initialization to get the correct PDA
+        let payload_hash = construct_payload_hash::<NativeHasher>(
+            execute_data.payload_merkle_root,
+            execute_data.signing_verifier_set_merkle_root,
         );
+        let (verification_pda, _bump) = get_signature_verification_pda(&payload_hash);
         Ok(verification_pda)
     }
 

@@ -1,4 +1,4 @@
-use axelar_solana_encoding::hasher::SolanaSyscallHasher;
+use axelar_solana_encoding::hasher::NativeHasher;
 use axelar_solana_encoding::types::execute_data::MerkleisedPayload;
 use axelar_solana_encoding::types::messages::{Message, Messages};
 use axelar_solana_encoding::types::payload::Payload;
@@ -102,7 +102,7 @@ pub async fn approve_message(runner: &mut SolanaAxelarIntegrationMetadata, messa
         incoming_message_pda_bump,
         signing_pda_bump,
         MessageStatus::approved(),
-        message.hash::<SolanaSyscallHasher>(),
+        message.hash::<NativeHasher>(),
         message.payload_hash,
     );
     assert_eq!(account, expected_message);

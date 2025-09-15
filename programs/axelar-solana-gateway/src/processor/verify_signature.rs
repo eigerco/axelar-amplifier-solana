@@ -1,4 +1,6 @@
+use axelar_solana_encoding::hasher::SolanaSyscallHasher;
 use axelar_solana_encoding::types::execute_data::SigningVerifierSetInfo;
+use axelar_solana_encoding::types::verifier_set::construct_payload_hash;
 use program_utils::pda::{BytemuckedPda, ValidPDA};
 use solana_program::account_info::{next_account_info, AccountInfo};
 use solana_program::entrypoint::ProgramResult;
@@ -53,8 +55,15 @@ impl Processor {
         let mut data = verification_session_account.try_borrow_mut_data()?;
         let session = SignatureVerificationSessionData::read_mut(&mut data)
             .ok_or(GatewayError::BytemuckDataLenInvalid)?;
+
+        // Construct the payload hash using the stored signing verifier set hash
+        let payload_hash = construct_payload_hash::<SolanaSyscallHasher>(
+            payload_merkle_root,
+            session.signature_verification.signing_verifier_set_hash,
+        );
+
         assert_valid_signature_verification_pda(
-            &payload_merkle_root,
+            &payload_hash,
             session.bump,
             verification_session_account.key,
         )?;

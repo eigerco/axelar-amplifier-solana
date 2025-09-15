@@ -1,3 +1,5 @@
+use axelar_solana_encoding::hasher::SolanaSyscallHasher;
+use axelar_solana_encoding::types::verifier_set::construct_payload_hash;
 use core::mem::size_of;
 use program_utils::pda::{BytemuckedPda, ValidPDA};
 use solana_program::account_info::{next_account_info, AccountInfo};
@@ -17,7 +19,8 @@ impl Processor {
     /// `execute_data`).
     ///
     /// Creates a [`SignatureVerificationSession`] PDA account to track signature verification state
-    /// for a batch of messages identified by the Merkle root of the Axelar payload.
+    /// for a batch of messages identified by the Merkle root of the Axelar payload, with explicit
+    /// specification of which verifier set should sign the payload.
     ///
     /// # Errors
     ///
@@ -31,6 +34,7 @@ impl Processor {
     /// * Verification session PDA derivation fails.
     /// * Session account is already initialized.
     /// * Data serialization fails.
+    /// * Signing verifier set is not valid or not recent enough.
     ///
     /// # Panics
     ///
@@ -39,7 +43,8 @@ impl Processor {
     pub fn process_initialize_payload_verification_session(
         program_id: &Pubkey,
         accounts: &[AccountInfo<'_>],
-        merkle_root: [u8; 32],
+        payload_merkle_root: [u8; 32],
+        signing_verifier_set_hash: [u8; 32],
     ) -> ProgramResult {
         // Accounts
         let accounts_iter = &mut accounts.iter();
@@ -85,14 +90,19 @@ impl Processor {
             GatewayConfig::read(&data).ok_or(GatewayError::BytemuckDataLenInvalid)?;
         assert_valid_gateway_root_pda(gateway_config.bump, gateway_root_pda.key)?;
 
+        // Construct the payload hash for PDA derivation
+        let payload_hash = construct_payload_hash::<SolanaSyscallHasher>(
+            payload_merkle_root,
+            signing_verifier_set_hash,
+        );
+
         // Check: Verification PDA can be derived from provided seeds.
-        // using canonical bump for the session account
-        let (verification_session_pda, bump) = crate::get_signature_verification_pda(&merkle_root);
+        let (verification_session_pda, bump) = crate::get_signature_verification_pda(&payload_hash);
         if verification_session_pda != *verification_session_account.key {
             return Err(GatewayError::InvalidVerificationSessionPDA.into());
         }
 
-        // Check: the verification session account has not been initialised already
+        // Check: the verification session account has not been initialised already.
         verification_session_account
             .check_uninitialized_pda()
             .map_err(|_err| GatewayError::VerificationSessionPDAInitialised)?;
@@ -101,7 +111,7 @@ impl Processor {
         // bump seed.
         let signers_seeds = &[
             seed_prefixes::SIGNATURE_VERIFICATION_SEED,
-            &merkle_root,
+            &payload_hash,
             &[bump],
         ];
 
@@ -123,6 +133,8 @@ impl Processor {
         let session = SignatureVerificationSessionData::read_mut(&mut data)
             .ok_or(GatewayError::BytemuckDataLenInvalid)?;
         session.bump = bump;
+        // Record the signing verifier set hash at initialization
+        session.signature_verification.signing_verifier_set_hash = signing_verifier_set_hash;
 
         Ok(())
     }

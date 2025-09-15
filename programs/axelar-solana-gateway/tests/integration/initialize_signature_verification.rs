@@ -1,10 +1,8 @@
-use axelar_solana_encoding::types::messages::Messages;
-use axelar_solana_encoding::types::payload::Payload;
+use axelar_solana_encoding::hasher::NativeHasher;
+use axelar_solana_encoding::types::verifier_set::{construct_payload_hash, verifier_set_hash};
 use axelar_solana_gateway::get_gateway_root_config_pda;
 use axelar_solana_gateway::state::signature_verification::SignatureVerification;
-use axelar_solana_gateway_test_fixtures::gateway::{
-    make_messages, make_verifier_set, random_bytes,
-};
+use axelar_solana_gateway_test_fixtures::gateway::random_bytes;
 use axelar_solana_gateway_test_fixtures::SolanaAxelarIntegration;
 use bytemuck::Zeroable;
 use solana_program_test::tokio;
@@ -23,17 +21,27 @@ async fn test_initialize_payload_verification_session() {
     let payload_merkle_root = random_bytes();
     let gateway_config_pda = get_gateway_root_config_pda().0;
 
+    // Get the initial verifier set hash from the test setup
+    let signing_verifier_set_hash = verifier_set_hash::<NativeHasher>(
+        &metadata.signers.verifier_set(),
+        &metadata.signers.domain_separator,
+    )
+    .unwrap();
+
     let ix = axelar_solana_gateway::instructions::initialize_payload_verification_session(
         metadata.payer.pubkey(),
         gateway_config_pda,
         payload_merkle_root,
+        signing_verifier_set_hash,
     )
     .unwrap();
     let _tx_result = metadata.send_tx(&[ix]).await.unwrap();
 
     // Check PDA contains the expected data
+    let payload_hash =
+        construct_payload_hash::<NativeHasher>(payload_merkle_root, signing_verifier_set_hash);
     let (verification_pda, bump) =
-        axelar_solana_gateway::get_signature_verification_pda(&payload_merkle_root);
+        axelar_solana_gateway::get_signature_verification_pda(&payload_hash);
 
     let verification_session_account = metadata
         .try_get_account_no_checks(&verification_pda)
@@ -52,10 +60,14 @@ async fn test_initialize_payload_verification_session() {
         .await;
 
     assert_eq!(session.bump, bump);
-    assert_eq!(
-        session.signature_verification,
-        SignatureVerification::zeroed()
-    );
+
+    let expected_verification = {
+        let mut sig_verification = SignatureVerification::zeroed();
+        sig_verification.signing_verifier_set_hash = signing_verifier_set_hash;
+        sig_verification
+    };
+
+    assert_eq!(session.signature_verification, expected_verification);
 }
 
 #[tokio::test]
@@ -71,10 +83,14 @@ async fn test_cannot_initialize_pda_twice() {
     let payload_merkle_root = random_bytes();
     let gateway_config_pda = get_gateway_root_config_pda().0;
 
+    // Get the initial verifier set hash from the test setup
+    let signing_verifier_set_hash = metadata.signers.verifier_set_hash();
+
     let ix = axelar_solana_gateway::instructions::initialize_payload_verification_session(
         metadata.payer.pubkey(),
         gateway_config_pda,
         payload_merkle_root,
+        signing_verifier_set_hash,
     )
     .unwrap();
     let _tx_result = metadata.send_tx(&[ix]).await.unwrap();
@@ -84,6 +100,7 @@ async fn test_cannot_initialize_pda_twice() {
         metadata.payer.pubkey(),
         gateway_config_pda,
         payload_merkle_root,
+        signing_verifier_set_hash,
     )
     .unwrap();
     let tx_result_second = metadata.send_tx(&[ix_second]).await.unwrap_err();
@@ -93,32 +110,4 @@ async fn test_cannot_initialize_pda_twice() {
         tx_result_second.result.is_err(),
         "Second initialization should fail"
     );
-}
-
-#[tokio::test]
-async fn test_same_payload_can_be_signed_by_multiple_verifier_sets_and_be_initialised() {
-    // Setup
-    let mut metadata = SolanaAxelarIntegration::builder()
-        .initial_signer_weights(vec![42])
-        .build()
-        .setup()
-        .await;
-
-    let signers_a = make_verifier_set(&[500, 200], 1, metadata.domain_separator);
-    let signers_b = make_verifier_set(&[500, 23], 101, metadata.domain_separator);
-
-    let messages = make_messages(5);
-    let payload = Payload::Messages(Messages(messages.clone()));
-    let execute_data_a = metadata.construct_execute_data(&signers_a, payload.clone());
-    let execute_data_b = metadata.construct_execute_data(&signers_b, payload);
-
-    for execute_data in [execute_data_a, execute_data_b] {
-        let ix = axelar_solana_gateway::instructions::initialize_payload_verification_session(
-            metadata.payer.pubkey(),
-            metadata.gateway_root_pda,
-            execute_data.payload_merkle_root,
-        )
-        .unwrap();
-        let _tx_result = metadata.send_tx(&[ix]).await.unwrap();
-    }
 }

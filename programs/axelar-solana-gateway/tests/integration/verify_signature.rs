@@ -1,9 +1,13 @@
 use std::sync::Arc;
 
+use axelar_solana_encoding::hasher::NativeHasher;
 use axelar_solana_encoding::types::messages::Messages;
 use axelar_solana_encoding::types::payload::Payload;
 use axelar_solana_encoding::types::pubkey::{PublicKey, Signature};
+use axelar_solana_encoding::types::verifier_set::construct_payload_hash;
 use axelar_solana_gateway::error::GatewayError;
+use axelar_solana_gateway::get_verifier_set_tracker_pda;
+use axelar_solana_gateway::instructions::verify_signature;
 use axelar_solana_gateway::state::signature_verification::verify_ecdsa_signature;
 use axelar_solana_gateway_test_fixtures::base::FindLog;
 use axelar_solana_gateway_test_fixtures::gateway::{
@@ -35,14 +39,16 @@ async fn test_verify_one_signature(
         .initialize_payload_verification_session(&execute_data)
         .await
         .unwrap();
-    let verifier_set_tracker_pda = metadata.signers.verifier_set_tracker().0;
+    let (verifier_set_tracker_pda, _) =
+        get_verifier_set_tracker_pda(execute_data.signing_verifier_set_merkle_root);
     let leaf_info = execute_data.signing_verifier_set_leaves.first().unwrap();
 
     // Verify the signature
-    let ix = axelar_solana_gateway::instructions::verify_signature(
+    let ix = verify_signature(
         metadata.gateway_root_pda,
         verifier_set_tracker_pda,
         execute_data.payload_merkle_root,
+        execute_data.signing_verifier_set_merkle_root,
         leaf_info.clone(),
     )
     .unwrap();
@@ -57,8 +63,12 @@ async fn test_verify_one_signature(
         .unwrap();
 
     // Check that the PDA contains the expected data
+    let payload_hash = construct_payload_hash::<NativeHasher>(
+        execute_data.payload_merkle_root,
+        execute_data.signing_verifier_set_merkle_root,
+    );
     let (verification_pda, bump) =
-        axelar_solana_gateway::get_signature_verification_pda(&execute_data.payload_merkle_root);
+        axelar_solana_gateway::get_signature_verification_pda(&payload_hash);
 
     let session = metadata
         .signature_verification_session(verification_pda)
@@ -95,14 +105,16 @@ async fn test_verify_all_signatures() {
         .initialize_payload_verification_session(&execute_data)
         .await
         .unwrap();
-    let verifier_set_tracker_pda = metadata.signers.verifier_set_tracker().0;
+    let (verifier_set_tracker_pda, _) =
+        get_verifier_set_tracker_pda(execute_data.signing_verifier_set_merkle_root);
 
     for verifier_set_leaf in execute_data.signing_verifier_set_leaves {
         // Verify the signature
-        let ix = axelar_solana_gateway::instructions::verify_signature(
+        let ix = verify_signature(
             metadata.gateway_root_pda,
             verifier_set_tracker_pda,
             execute_data.payload_merkle_root,
+            execute_data.signing_verifier_set_merkle_root,
             verifier_set_leaf,
         )
         .unwrap();
@@ -116,8 +128,12 @@ async fn test_verify_all_signatures() {
     }
 
     // Check that the PDA contains the expected data
+    let payload_hash = construct_payload_hash::<NativeHasher>(
+        execute_data.payload_merkle_root,
+        execute_data.signing_verifier_set_merkle_root,
+    );
     let (verification_pda, bump) =
-        axelar_solana_gateway::get_signature_verification_pda(&execute_data.payload_merkle_root);
+        axelar_solana_gateway::get_signature_verification_pda(&payload_hash);
 
     let session = metadata
         .signature_verification_session(verification_pda)
@@ -151,7 +167,8 @@ async fn test_fails_to_verify_bad_signature() {
         .initialize_payload_verification_session(&execute_data)
         .await
         .unwrap();
-    let verifier_set_tracker_pda = metadata.signers.verifier_set_tracker().0;
+    let (verifier_set_tracker_pda, _) =
+        get_verifier_set_tracker_pda(execute_data.signing_verifier_set_merkle_root);
     let leaf_info = &mut execute_data.signing_verifier_set_leaves[0];
     match &mut leaf_info.signature {
         Signature::EcdsaRecoverable(data) => {
@@ -163,10 +180,11 @@ async fn test_fails_to_verify_bad_signature() {
     };
 
     // Verify the signature
-    let ix = axelar_solana_gateway::instructions::verify_signature(
+    let ix = verify_signature(
         metadata.gateway_root_pda,
         verifier_set_tracker_pda,
         execute_data.payload_merkle_root,
+        execute_data.signing_verifier_set_merkle_root,
         leaf_info.clone(),
     )
     .unwrap();
@@ -203,7 +221,8 @@ async fn test_fails_to_verify_signature_for_different_merkle_root() {
         .await
         .unwrap();
     let leaf_info = &mut execute_data.signing_verifier_set_leaves[0];
-    let verifier_set_tracker_pda = metadata.signers.verifier_set_tracker().0;
+    let (verifier_set_tracker_pda, _) =
+        get_verifier_set_tracker_pda(execute_data.signing_verifier_set_merkle_root);
 
     let random_valid_merkle_root = {
         let payload = Payload::Messages(Messages(vec![random_message(); 5]));
@@ -216,10 +235,11 @@ async fn test_fails_to_verify_signature_for_different_merkle_root() {
     };
 
     // Verify the signature
-    let ix = axelar_solana_gateway::instructions::verify_signature(
+    let ix = verify_signature(
         metadata.gateway_root_pda,
         verifier_set_tracker_pda,
         random_valid_merkle_root, // <- this is the failure culprit
+        execute_data.signing_verifier_set_merkle_root,
         leaf_info.clone(),
     )
     .unwrap();
@@ -274,7 +294,8 @@ async fn test_large_weight_will_validate_whole_batch() {
         .initialize_payload_verification_session(&execute_data)
         .await
         .unwrap();
-    let verifier_set_tracker_pda = metadata.signers.verifier_set_tracker().0;
+    let (verifier_set_tracker_pda, _) =
+        get_verifier_set_tracker_pda(execute_data.signing_verifier_set_merkle_root);
     let large_wetight_leaf = execute_data
         .signing_verifier_set_leaves
         .iter()
@@ -282,10 +303,11 @@ async fn test_large_weight_will_validate_whole_batch() {
         .expect("guaranteed to be in the set");
 
     // Verify the signature
-    let ix = axelar_solana_gateway::instructions::verify_signature(
+    let ix = verify_signature(
         metadata.gateway_root_pda,
         verifier_set_tracker_pda,
         execute_data.payload_merkle_root,
+        execute_data.signing_verifier_set_merkle_root,
         large_wetight_leaf.clone(),
     )
     .unwrap();
@@ -300,8 +322,12 @@ async fn test_large_weight_will_validate_whole_batch() {
         .unwrap();
 
     // Check that the PDA contains the expected data
+    let payload_hash = construct_payload_hash::<NativeHasher>(
+        execute_data.payload_merkle_root,
+        execute_data.signing_verifier_set_merkle_root,
+    );
     let (verification_pda, bump) =
-        axelar_solana_gateway::get_signature_verification_pda(&execute_data.payload_merkle_root);
+        axelar_solana_gateway::get_signature_verification_pda(&payload_hash);
 
     let session = metadata
         .signature_verification_session(verification_pda)
@@ -429,7 +455,8 @@ async fn fails_to_verify_signature_with_invalid_domain_separator() {
         .initialize_payload_verification_session(&execute_data)
         .await
         .unwrap();
-    let verifier_set_tracker_pda = metadata.signers.verifier_set_tracker().0;
+    let (verifier_set_tracker_pda, _) =
+        get_verifier_set_tracker_pda(execute_data.signing_verifier_set_merkle_root);
     let mut leaf_info = execute_data
         .signing_verifier_set_leaves
         .first()
@@ -440,10 +467,11 @@ async fn fails_to_verify_signature_with_invalid_domain_separator() {
     leaf_info.leaf.domain_separator[0] = leaf_info.leaf.domain_separator[0].wrapping_add(1);
 
     // Attempt to verify the signature with different domain separator
-    let ix = axelar_solana_gateway::instructions::verify_signature(
+    let ix = verify_signature(
         metadata.gateway_root_pda,
         verifier_set_tracker_pda,
         execute_data.payload_merkle_root,
+        execute_data.signing_verifier_set_merkle_root,
         leaf_info,
     )
     .unwrap();

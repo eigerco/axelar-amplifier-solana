@@ -2,8 +2,10 @@
 
 use core::fmt::Debug;
 
+use axelar_solana_encoding::hasher::NativeHasher;
 use axelar_solana_encoding::types::execute_data::{MerkleisedMessage, SigningVerifierSetInfo};
 use axelar_solana_encoding::types::messages::Message;
+use axelar_solana_encoding::types::verifier_set::construct_payload_hash;
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use solana_program::bpf_loader_upgradeable;
 use solana_program::instruction::{AccountMeta, Instruction};
@@ -86,6 +88,8 @@ pub enum GatewayInstruction {
     InitializePayloadVerificationSession {
         /// The Merkle root for the Payload being verified.
         payload_merkle_root: [u8; 32],
+        /// Hash of the verifier set that should sign this payload
+        signing_verifier_set_hash: [u8; 32],
     },
 
     /// Verifies a signature within a Payload verification session
@@ -394,8 +398,12 @@ pub fn initialize_payload_verification_session(
     payer: Pubkey,
     gateway_config_pda: Pubkey,
     payload_merkle_root: [u8; 32],
+    signing_verifier_set_hash: [u8; 32],
 ) -> Result<Instruction, ProgramError> {
-    let (verification_session_pda, _) = crate::get_signature_verification_pda(&payload_merkle_root);
+    let payload_hash =
+        construct_payload_hash::<NativeHasher>(payload_merkle_root, signing_verifier_set_hash);
+
+    let (verification_session_pda, _) = crate::get_signature_verification_pda(&payload_hash);
 
     let accounts = vec![
         AccountMeta::new(payer, true),
@@ -406,6 +414,7 @@ pub fn initialize_payload_verification_session(
 
     let data = to_vec(&GatewayInstruction::InitializePayloadVerificationSession {
         payload_merkle_root,
+        signing_verifier_set_hash,
     })?;
 
     Ok(Instruction {
@@ -425,10 +434,13 @@ pub fn verify_signature(
     gateway_config_pda: Pubkey,
     verifier_set_tracker_pda: Pubkey,
     payload_merkle_root: [u8; 32],
+    signing_verifier_set_hash: [u8; 32],
     verifier_info: SigningVerifierSetInfo,
 ) -> Result<Instruction, ProgramError> {
-    let (verification_session_pda, _bump) =
-        crate::get_signature_verification_pda(&payload_merkle_root);
+    let payload_hash =
+        construct_payload_hash::<NativeHasher>(payload_merkle_root, signing_verifier_set_hash);
+
+    let (verification_session_pda, _bump) = crate::get_signature_verification_pda(&payload_hash);
 
     let accounts = vec![
         AccountMeta::new_readonly(gateway_config_pda, false),

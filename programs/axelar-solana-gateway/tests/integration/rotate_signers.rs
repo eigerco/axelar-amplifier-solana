@@ -6,6 +6,7 @@ use axelar_solana_encoding::types::payload::Payload;
 use axelar_solana_encoding::types::verifier_set::verifier_set_hash;
 use axelar_solana_gateway::error::GatewayError;
 use axelar_solana_gateway::get_verifier_set_tracker_pda;
+use axelar_solana_gateway::instructions::rotate_signers;
 use axelar_solana_gateway::processor::{GatewayEvent, VerifierSetRotated};
 use axelar_solana_gateway::state::verifier_set_tracker::VerifierSetTracker;
 use axelar_solana_gateway_test_fixtures::gateway::{
@@ -45,11 +46,13 @@ async fn successfully_rotates_signers() {
         .await
         .unwrap();
 
-    let rotate_signers_ix = axelar_solana_gateway::instructions::rotate_signers(
+    let (signing_verifier_set_tracker_pda, _) =
+        get_verifier_set_tracker_pda(execute_data.signing_verifier_set_merkle_root);
+    let rotate_signers_ix = rotate_signers(
         metadata.gateway_root_pda,
         verification_session_account,
-        metadata.signers.verifier_set_tracker().0,
-        axelar_solana_gateway::get_verifier_set_tracker_pda(new_verifier_set_merkle_root).0,
+        signing_verifier_set_tracker_pda,
+        get_verifier_set_tracker_pda(new_verifier_set_merkle_root).0,
         metadata.payer.pubkey(),
         None,
         new_verifier_set_hash,
@@ -119,11 +122,13 @@ async fn fail_when_approve_messages_payload_hash_is_used() {
     )
     .unwrap();
     let (new_vs_tracker_pda, _new_vs_tracker_bump) = get_verifier_set_tracker_pda(random_bytes());
+    let (signing_verifier_set_tracker_pda, _) =
+        get_verifier_set_tracker_pda(execute_data.signing_verifier_set_merkle_root);
 
-    let rotate_signers_ix = axelar_solana_gateway::instructions::rotate_signers(
+    let rotate_signers_ix = rotate_signers(
         metadata.gateway_root_pda,
         verification_session_account,
-        metadata.signers.verifier_set_tracker().0,
+        signing_verifier_set_tracker_pda,
         new_vs_tracker_pda,
         metadata.payer.pubkey(),
         None,
@@ -252,11 +257,13 @@ async fn succeed_if_verifier_set_signed_by_old_verifier_set_and_submitted_by_the
     )
     .unwrap();
     let (new_vs_tracker_pda, new_vs_tracker_bump) =
-        axelar_solana_gateway::get_verifier_set_tracker_pda(new_verifier_set_hash);
-    let rotate_signers_ix = axelar_solana_gateway::instructions::rotate_signers(
+        get_verifier_set_tracker_pda(new_verifier_set_hash);
+    let (signing_verifier_set_tracker_pda, _) =
+        get_verifier_set_tracker_pda(execute_data.signing_verifier_set_merkle_root);
+    let rotate_signers_ix = rotate_signers(
         metadata.gateway_root_pda,
         signing_session_pda,
-        metadata.signers.verifier_set_tracker().0,
+        signing_verifier_set_tracker_pda,
         new_vs_tracker_pda,
         metadata.payer.pubkey(),
         Some(metadata.operator.pubkey()),
@@ -340,11 +347,13 @@ async fn fail_if_provided_operator_is_not_the_real_operator_thats_stored_in_gate
     )
     .unwrap();
     let (new_vs_tracker_pda, _new_vs_tracker_bump) =
-        axelar_solana_gateway::get_verifier_set_tracker_pda(new_verifier_set_hash);
-    let rotate_signers_ix = axelar_solana_gateway::instructions::rotate_signers(
+        get_verifier_set_tracker_pda(new_verifier_set_hash);
+    let (signing_verifier_set_tracker_pda, _) =
+        get_verifier_set_tracker_pda(execute_data.signing_verifier_set_merkle_root);
+    let rotate_signers_ix = rotate_signers(
         metadata.gateway_root_pda,
         signing_session_pda,
-        metadata.signers.verifier_set_tracker().0,
+        signing_verifier_set_tracker_pda,
         new_vs_tracker_pda,
         metadata.payer.pubkey(),
         Some(fake_operator.pubkey()),
@@ -405,11 +414,13 @@ async fn fail_if_operator_only_passed_but_not_actual_signer() {
     )
     .unwrap();
     let (new_vs_tracker_pda, _new_vs_tracker_bump) =
-        axelar_solana_gateway::get_verifier_set_tracker_pda(new_verifier_set_hash);
-    let mut rotate_signers_ix = axelar_solana_gateway::instructions::rotate_signers(
+        get_verifier_set_tracker_pda(new_verifier_set_hash);
+    let (signing_verifier_set_tracker_pda, _) =
+        get_verifier_set_tracker_pda(execute_data.signing_verifier_set_merkle_root);
+    let mut rotate_signers_ix = rotate_signers(
         metadata.gateway_root_pda,
         signing_session_pda,
-        metadata.signers.verifier_set_tracker().0,
+        signing_verifier_set_tracker_pda,
         new_vs_tracker_pda,
         metadata.payer.pubkey(),
         Some(metadata.operator.pubkey()),

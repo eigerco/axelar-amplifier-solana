@@ -344,7 +344,7 @@ pub fn refund_native_fees_instruction(
 /// # Errors
 /// - ix data cannot be serialized
 #[allow(clippy::too_many_arguments)]
-pub fn pay_spl_for_contract_call_instruction(
+pub fn pay_spl_token_for_contract_call_instruction(
     sender: &Pubkey,
     sender_ata: &Pubkey,
     mint: &Pubkey,

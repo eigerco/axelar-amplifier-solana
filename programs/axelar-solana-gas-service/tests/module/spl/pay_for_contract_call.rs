@@ -7,7 +7,7 @@ use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer};
 #[rstest::rstest]
 #[case(spl_token::id())]
 #[case(spl_token_2022::id())]
-async fn test_pay_spl_for_contract_call(#[case] token_program_id: Pubkey) {
+async fn test_pay_spl_token_for_contract_call(#[case] token_program_id: Pubkey) {
     // Setup the test fixture and deploy the gas service program
 
     use axelar_solana_gas_service_events::events::{
@@ -57,7 +57,7 @@ async fn test_pay_spl_for_contract_call(#[case] token_program_id: Pubkey) {
     let params = b"hello 123321".to_vec();
 
     // Create the instruction for paying gas fees with SPL tokens
-    let ix = axelar_solana_gas_service::instructions::pay_spl_for_contract_call_instruction(
+    let ix = axelar_solana_gas_service::instructions::pay_spl_token_for_contract_call_instruction(
         &payer.pubkey(),
         &payer_ata,
         &mint,

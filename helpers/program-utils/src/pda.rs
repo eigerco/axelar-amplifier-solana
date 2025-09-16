@@ -144,7 +144,16 @@ pub fn init_pda_raw<'a, 'b>(
 pub fn close_pda(
     lamport_destination: &AccountInfo<'_>,
     pda_to_close: &AccountInfo<'_>,
+    expected_owner_program_id: &Pubkey,
 ) -> Result<(), solana_program::program_error::ProgramError> {
+    // Ensure the PDA is initialized and owned by the expected program
+    pda_to_close
+        .check_initialized_pda_without_deserialization(expected_owner_program_id)
+        .map_err(|err| {
+            msg!("PDA is not initialized: {}", err);
+            ProgramError::InvalidArgument
+        })?;
+
     // Transfer the lamports to the destination account
     let dest_starting_lamports = lamport_destination.lamports();
     **lamport_destination.lamports.borrow_mut() = dest_starting_lamports
@@ -236,7 +245,7 @@ impl<'a> ValidPDA for &AccountInfo<'a> {
     }
 }
 
-/// Convenience trait to store and load rkyv serialized data to/from an account.
+/// Convenience trait to store and load borsh serialized data to/from an account.
 pub trait BorshPda
 where
     Self: Sized + Clone + BorshSerialize + BorshDeserialize,

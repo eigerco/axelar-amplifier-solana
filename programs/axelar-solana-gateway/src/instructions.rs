@@ -5,7 +5,6 @@ use core::fmt::Debug;
 use axelar_solana_encoding::types::execute_data::{MerkleisedMessage, SigningVerifierSetInfo};
 use axelar_solana_encoding::types::messages::Message;
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
-use itertools::Itertools;
 use solana_program::bpf_loader_upgradeable;
 use solana_program::instruction::{AccountMeta, Instruction};
 use solana_program::program_error::ProgramError;
@@ -66,24 +65,6 @@ pub enum GatewayInstruction {
         signing_pda_bump: u8,
     },
 
-    /// Represents the `CallContract` Axelar event. The contract call data is expected to be
-    /// handled off-chain by uploading the data using the relayer API.
-    ///
-    /// Accounts expected by this instruction:
-    /// 0. [] Sender (origin) of the message, program id
-    /// 1. [SIGNER] PDA created by the `sender`, works as authorization token for a given program id
-    /// 2. [] Gateway Root Config PDA account
-    CallContractOffchainData {
-        /// The name of the target blockchain.
-        destination_chain: String,
-        /// The address of the target contract in the destination blockchain.
-        destination_contract_address: String,
-        /// Hash of the contract call data, to be uploaded off-chain through the relayer API.
-        payload_hash: [u8; 32],
-        /// The pda bump for the signing PDA
-        signing_pda_bump: u8,
-    },
-
     /// Initializes the Gateway configuration PDA account.
     ///
     /// Accounts expected by this instruction:
@@ -92,7 +73,7 @@ pub enum GatewayInstruction {
     /// 2. [] Gateway's `ProgramData` account
     /// 3. [WRITE] Gateway Root Config PDA account
     /// 4. [] System Program account
-    /// 5..N [WRITE] uninitialized `VerifierSetTracker` PDA accounts
+    /// 5. [WRITE] uninitialized `VerifierSetTracker` PDA account
     InitializeConfig(InitializeConfig),
 
     /// Initializes a verification session for a given Payload root.
@@ -226,16 +207,22 @@ pub enum GatewayInstruction {
     TransferOperatorship,
 }
 
+/// Represents an initial verifier set with its hash and PDA
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct InitialVerifierSet {
+    /// The hash of the verifier set
+    pub hash: VerifierSetHash,
+    /// The PDA for the verifier set tracker
+    pub pda: Pubkey,
+}
+
 /// Configuration parameters for initializing the axelar-solana gateway
-#[derive(Debug, Clone, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct InitializeConfig {
     /// The domain separator, used as an input for hashing payloads.
     pub domain_separator: [u8; 32],
-    /// initial signer sets
-    /// The order is important:
-    /// - first element == oldest entry
-    /// - last element == latest entry
-    pub initial_verifier_set: Vec<VerifierSetHash>,
+    /// initial verifier set
+    pub initial_verifier_set: InitialVerifierSet,
     /// the minimum delay required between rotations
     pub minimum_rotation_delay: RotationDelaySecs,
     /// The gateway operator.
@@ -355,44 +342,6 @@ pub fn call_contract(
     })
 }
 
-/// Creates a [`CallContractOffchainData`] instruction.
-///
-/// # Errors
-///
-/// Returns a [`ProgramError::BorshIoError`] if the instruction serialization fails.
-#[allow(clippy::too_many_arguments)]
-pub fn call_contract_offchain_data(
-    gateway_program_id: Pubkey,
-    gateway_root_pda: Pubkey,
-    sender: Pubkey,
-    sender_call_contract_pda: Option<(Pubkey, u8)>,
-    destination_chain: String,
-    destination_contract_address: String,
-    payload_hash: [u8; 32],
-) -> Result<Instruction, ProgramError> {
-    let data = to_vec(&GatewayInstruction::CallContractOffchainData {
-        destination_chain,
-        destination_contract_address,
-        payload_hash,
-        signing_pda_bump: sender_call_contract_pda.map_or(0, |(_, bump)| bump),
-    })?;
-
-    let accounts = vec![
-        AccountMeta::new_readonly(sender, sender_call_contract_pda.is_none()),
-        AccountMeta::new_readonly(
-            sender_call_contract_pda.map_or(crate::ID, |(pda, _)| pda),
-            sender_call_contract_pda.is_some(),
-        ),
-        AccountMeta::new_readonly(gateway_root_pda, false),
-    ];
-
-    Ok(Instruction {
-        program_id: gateway_program_id,
-        accounts,
-        data,
-    })
-}
-
 /// Creates a [`GatewayInstruction::InitializeConfig`] instruction.
 ///
 /// # Errors
@@ -403,7 +352,7 @@ pub fn initialize_config(
     payer: Pubkey,
     upgrade_authority: Pubkey,
     domain_separator: [u8; 32],
-    initial_verifier_sets: Vec<(VerifierSetHash, Pubkey)>,
+    initial_verifier_set: InitialVerifierSet,
     minimum_rotation_delay: RotationDelaySecs,
     operator: Pubkey,
     previous_verifier_retention: VerifierSetEpoch,
@@ -412,27 +361,18 @@ pub fn initialize_config(
     let gateway_program_data =
         solana_program::bpf_loader_upgradeable::get_program_data_address(&crate::ID);
 
-    let mut accounts = vec![
+    let accounts = vec![
         AccountMeta::new(payer, true),
         AccountMeta::new_readonly(upgrade_authority, true),
         AccountMeta::new_readonly(gateway_program_data, false),
         AccountMeta::new(gateway_config_pda, false),
         AccountMeta::new_readonly(solana_program::system_program::id(), false),
+        AccountMeta::new(initial_verifier_set.pda, false),
     ];
-    for (_hash, pda) in &initial_verifier_sets {
-        accounts.push(AccountMeta {
-            pubkey: *pda,
-            is_signer: false,
-            is_writable: true,
-        });
-    }
 
     let data = to_vec(&GatewayInstruction::InitializeConfig(InitializeConfig {
         domain_separator,
-        initial_verifier_set: initial_verifier_sets
-            .into_iter()
-            .map(|x| (x.0))
-            .collect_vec(),
+        initial_verifier_set,
         minimum_rotation_delay,
         operator,
         previous_verifier_retention,

@@ -20,23 +20,26 @@
 )]
 
 mod deploy_interchain_token;
+mod deploy_manager_mismatch;
 mod deploy_remote;
+mod fee_handling;
 mod flow_limits;
 mod from_evm_to_solana;
 mod from_solana_to_evm;
 mod handover_mint_authority;
 mod idempotent_ata_test;
+mod metadata_length_validation;
 mod metadata_retrieval;
 mod pause_unpause;
 mod role_management;
 mod token_id_validation;
+mod transfer_destination;
 
 use event_utils::Event;
 use solana_program_test::BanksTransactionResultWithMetadata;
 use solana_sdk::account::Account;
 use solana_sdk::account_info::Account as AccountTrait;
 use solana_sdk::account_info::IntoAccountInfo;
-use solana_sdk::clock::Clock;
 use solana_sdk::instruction::Instruction;
 use solana_sdk::program_error::ProgramError;
 use solana_sdk::program_pack::Pack as _;
@@ -176,8 +179,6 @@ impl ItsTestContext {
             .unwrap()
             .clone();
 
-        let clock_sysvar = self.solana_chain.get_sysvar::<Clock>().await;
-
         let its_ix_inputs = ItsGmpInstructionInputs::builder()
             .payer(self.solana_chain.fixture.payer.pubkey())
             .incoming_message_pda(incoming_message_pda)
@@ -185,7 +186,6 @@ impl ItsTestContext {
             .message(merkelised_message.leaf.message)
             .payload(payload)
             .token_program(token_program)
-            .timestamp(clock_sysvar.unix_timestamp)
             .mint_opt(maybe_mint)
             .build();
 
@@ -349,7 +349,6 @@ impl ItsTestContext {
     ) {
         let amount = 100;
 
-        let clock_sysvar = self.solana_chain.get_sysvar::<Clock>().await;
         let transfer_ix = axelar_solana_its::instruction::interchain_transfer(
             self.solana_wallet,
             token_account,
@@ -360,7 +359,6 @@ impl ItsTestContext {
             solana_token,
             spl_token_2022::id(),
             0,
-            clock_sysvar.unix_timestamp,
         )
         .unwrap();
 
@@ -391,7 +389,7 @@ impl ItsTestContext {
             .interchain_transfer(
                 token_id,
                 self.solana_chain_name.clone(),
-                token_account.to_bytes().into(),
+                self.solana_wallet.to_bytes().into(),
                 amount_back.into(),
                 Bytes::new(),
                 0.into(),

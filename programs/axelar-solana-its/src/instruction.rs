@@ -7,7 +7,7 @@ use axelar_message_primitives::{DataPayload, DestinationProgramId};
 use axelar_solana_encoding::types::messages::Message;
 use axelar_solana_gateway::state::incoming_message::command_id;
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
-use interchain_token_transfer_gmp::{GMPPayload, InterchainTransfer, SendToHub};
+use interchain_token_transfer_gmp::GMPPayload;
 use solana_program::bpf_loader_upgradeable;
 use solana_program::instruction::{AccountMeta, Instruction};
 use solana_program::program_error::ProgramError;
@@ -424,51 +424,6 @@ pub enum InterchainTokenServiceInstruction {
         signing_pda_bump: u8,
     },
 
-    /// Transfers tokens to a contract on the destination chain and call the give instruction on
-    /// it. This instruction is is the same as [`InterchainTransfer`], but will fail if call data
-    /// is empty.
-    ///
-    /// 0. [writable,signer] The address of the payer
-    /// 1. [maybe signer] The address of the owner or delegate of the source account of the
-    ///    transfer. In case it's the `TokenManager`, it shouldn't be set as signer as the signing
-    ///    happens on chain.
-    /// 2. [writable] The source account from which the tokens are being transferred
-    /// 3. [] The mint account (token address)
-    /// 4. [] The token manager account associated with the interchain token
-    /// 5. [writable] The token manager Associated Token Account associated with the mint
-    /// 6. [] The token program account that was used to create the mint (`spl_token` vs `spl_token_2022`)
-    /// 7. [writable] The account tracking the flow of this mint for the current epoch
-    /// 8. [] The GMP gateway root account
-    /// 9. [] The GMP gateway program account
-    /// 10. [writable] The GMP gas configuration account
-    /// 11. [] The GMP gas service program account
-    /// 12. [] The system program account
-    /// 13. [] The ITS root account
-    /// 14. [] The GMP call contract signing account
-    /// 15. [] The ITS program account
-    CallContractWithInterchainTokenOffchainData {
-        /// The token id associated with the token
-        token_id: [u8; 32],
-
-        /// The chain where the tokens are being transferred to.
-        destination_chain: String,
-
-        /// The address on the destination chain to send the tokens to.
-        destination_address: Vec<u8>,
-
-        /// Amount of tokens being transferred.
-        amount: u64,
-
-        /// Hash of the entire payload
-        payload_hash: [u8; 32],
-
-        /// The gas value to be paid for the deploy transaction
-        gas_value: u64,
-
-        /// Signing PDA bump
-        signing_pda_bump: u8,
-    },
-
     /// Sets the flow limit for an interchain token.
     ///
     /// 0. [writable,signer] The address of the payer
@@ -730,10 +685,6 @@ pub struct ItsGmpInstructionInputs {
     /// ignored by `DeployInterchainToken`.
     #[builder(default, setter(strip_option(fallback = mint_opt)))]
     pub(crate) mint: Option<Pubkey>,
-
-    /// The current approximate timestamp. Required for `InterchainTransfer`s.
-    #[builder(default, setter(strip_option(fallback = timestamp_opt)))]
-    pub(crate) timestamp: Option<i64>,
 }
 
 /// Creates an [`InterchainTokenServiceInstruction::Initialize`] instruction.
@@ -1252,7 +1203,6 @@ pub fn deploy_remote_interchain_token_with_minter(
 pub fn register_token_metadata(
     payer: Pubkey,
     mint: Pubkey,
-    token_program: Pubkey,
     gas_value: u64,
 ) -> Result<Instruction, ProgramError> {
     let (gateway_root_pda, _) = axelar_solana_gateway::get_gateway_root_config_pda();
@@ -1264,7 +1214,6 @@ pub fn register_token_metadata(
     let accounts = vec![
         AccountMeta::new(payer, true),
         AccountMeta::new_readonly(mint, false),
-        AccountMeta::new_readonly(token_program, false),
         AccountMeta::new_readonly(gateway_root_pda, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
         AccountMeta::new(gas_config_pda, false),
@@ -1412,13 +1361,10 @@ pub fn interchain_transfer(
     mint: Pubkey,
     token_program: Pubkey,
     gas_value: u64,
-    timestamp: i64,
 ) -> Result<Instruction, ProgramError> {
     let (gateway_root_pda, _) = axelar_solana_gateway::get_gateway_root_config_pda();
     let (its_root_pda, _) = crate::find_its_root_pda();
     let (token_manager_pda, _) = crate::find_token_manager_pda(&its_root_pda, &token_id);
-    let flow_epoch = flow_limit::flow_epoch_with_timestamp(timestamp)?;
-    let (flow_slot_pda, _) = crate::find_flow_slot_pda(&token_manager_pda, flow_epoch);
     let token_manager_ata =
         get_associated_token_address_with_program_id(&token_manager_pda, &mint, &token_program);
     let (call_contract_signing_pda, signing_pda_bump) =
@@ -1429,10 +1375,9 @@ pub fn interchain_transfer(
         AccountMeta::new_readonly(payer, true),
         AccountMeta::new(source_account, false),
         AccountMeta::new(mint, false),
-        AccountMeta::new_readonly(token_manager_pda, false),
+        AccountMeta::new(token_manager_pda, false),
         AccountMeta::new(token_manager_ata, false),
         AccountMeta::new_readonly(token_program, false),
-        AccountMeta::new(flow_slot_pda, false),
         AccountMeta::new_readonly(gateway_root_pda, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
         AccountMeta::new(gas_config_pda, false),
@@ -1476,12 +1421,9 @@ pub fn call_contract_with_interchain_token(
     data: Vec<u8>,
     token_program: Pubkey,
     gas_value: u64,
-    timestamp: i64,
 ) -> Result<Instruction, ProgramError> {
     let (its_root_pda, _) = crate::find_its_root_pda();
     let (token_manager_pda, _) = crate::find_token_manager_pda(&its_root_pda, &token_id);
-    let flow_epoch = flow_limit::flow_epoch_with_timestamp(timestamp)?;
-    let (flow_slot_pda, _) = crate::find_flow_slot_pda(&token_manager_pda, flow_epoch);
     let token_manager_ata =
         get_associated_token_address_with_program_id(&token_manager_pda, &mint, &token_program);
     let (call_contract_signing_pda, signing_pda_bump) =
@@ -1495,7 +1437,6 @@ pub fn call_contract_with_interchain_token(
         AccountMeta::new_readonly(token_manager_pda, false),
         AccountMeta::new(token_manager_ata, false),
         AccountMeta::new_readonly(token_program, false),
-        AccountMeta::new(flow_slot_pda, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
         AccountMeta::new(gas_config_pda, false),
         AccountMeta::new_readonly(axelar_solana_gas_service::ID, false),
@@ -1522,94 +1463,6 @@ pub fn call_contract_with_interchain_token(
         accounts,
         data,
     })
-}
-
-/// Creates an [`InterchainTokenServiceInstruction::CallContractWithInterchainTokenOffchainData`]
-/// instruction.
-///
-/// # Errors
-///
-/// [`ProgramError::BorshIoError`]: When instruction serialization fails.
-pub fn call_contract_with_interchain_token_offchain_data(
-    payer: Pubkey,
-    source_account: Pubkey,
-    token_id: [u8; 32],
-    destination_chain: String,
-    destination_address: Vec<u8>,
-    amount: u64,
-    mint: Pubkey,
-    data: Vec<u8>,
-    token_program: Pubkey,
-    gas_value: u64,
-    timestamp: i64,
-) -> Result<(Instruction, Vec<u8>), ProgramError> {
-    let (its_root_pda, _) = crate::find_its_root_pda();
-    let (token_manager_pda, _) = crate::find_token_manager_pda(&its_root_pda, &token_id);
-    let flow_epoch = flow_limit::flow_epoch_with_timestamp(timestamp)?;
-    let (flow_slot_pda, _) = crate::find_flow_slot_pda(&token_manager_pda, flow_epoch);
-    let token_manager_ata =
-        get_associated_token_address_with_program_id(&token_manager_pda, &mint, &token_program);
-    let (call_contract_signing_pda, signing_pda_bump) =
-        axelar_solana_gateway::get_call_contract_signing_pda(crate::ID);
-    let (gas_config_pda, _bump) = axelar_solana_gas_service::get_config_pda();
-
-    let accounts = vec![
-        AccountMeta::new_readonly(payer, true),
-        AccountMeta::new(source_account, false),
-        AccountMeta::new(mint, false),
-        AccountMeta::new_readonly(token_manager_pda, false),
-        AccountMeta::new(token_manager_ata, false),
-        AccountMeta::new_readonly(token_program, false),
-        AccountMeta::new(flow_slot_pda, false),
-        AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
-        AccountMeta::new(gas_config_pda, false),
-        AccountMeta::new_readonly(axelar_solana_gas_service::ID, false),
-        AccountMeta::new_readonly(system_program::ID, false),
-        AccountMeta::new_readonly(its_root_pda, false),
-        AccountMeta::new_readonly(call_contract_signing_pda, false),
-        AccountMeta::new_readonly(crate::ID, false),
-    ];
-
-    let payload = GMPPayload::SendToHub(SendToHub {
-        payload: GMPPayload::InterchainTransfer(InterchainTransfer {
-            selector: InterchainTransfer::MESSAGE_TYPE_ID
-                .try_into()
-                .map_err(|_err| ProgramError::ArithmeticOverflow)?,
-            token_id: token_id.into(),
-            source_address: source_account.to_bytes().into(),
-            destination_address: destination_address.clone().into(),
-            amount: alloy_primitives::U256::from(amount),
-            data: data.into(),
-        })
-        .encode()
-        .into(),
-        selector: SendToHub::MESSAGE_TYPE_ID
-            .try_into()
-            .map_err(|_err| ProgramError::ArithmeticOverflow)?,
-        destination_chain: destination_chain.clone(),
-    })
-    .encode();
-
-    let data = to_vec(
-        &InterchainTokenServiceInstruction::CallContractWithInterchainTokenOffchainData {
-            token_id,
-            destination_chain,
-            destination_address,
-            amount,
-            gas_value,
-            signing_pda_bump,
-            payload_hash: solana_program::keccak::hashv(&[&payload]).0,
-        },
-    )?;
-
-    Ok((
-        Instruction {
-            program_id: crate::ID,
-            accounts,
-            data,
-        },
-        payload,
-    ))
 }
 
 /// Creates an [`InterchainTokenServiceInstruction::SetFlowLimit`].
@@ -1671,12 +1524,8 @@ pub fn its_gmp_payload(inputs: ItsGmpInstructionInputs) -> Result<Instruction, P
             .map_err(|_err| ProgramError::InvalidInstructionData)?,
     };
 
-    let mut its_accounts = derive_its_accounts(
-        &unwrapped_payload,
-        inputs.token_program,
-        inputs.mint,
-        inputs.timestamp,
-    )?;
+    let mut its_accounts =
+        derive_its_accounts(&unwrapped_payload, inputs.token_program, inputs.mint)?;
 
     accounts.append(&mut its_accounts);
 
@@ -1812,7 +1661,6 @@ pub(crate) fn derive_its_accounts<'a, T>(
     payload: T,
     token_program: Pubkey,
     maybe_mint: Option<Pubkey>,
-    maybe_timestamp: Option<i64>,
 ) -> Result<Vec<AccountMeta>, ProgramError>
 where
     T: TryInto<ItsMessageRef<'a>>,
@@ -1829,13 +1677,8 @@ where
     let (mut accounts, mint, token_manager_pda) =
         derive_common_its_accounts(token_program, &message, maybe_mint)?;
 
-    let mut message_specific_accounts = derive_specific_its_accounts(
-        &message,
-        mint,
-        token_manager_pda,
-        token_program,
-        maybe_timestamp,
-    )?;
+    let mut message_specific_accounts =
+        derive_specific_its_accounts(&message, mint, token_manager_pda, token_program)?;
 
     accounts.append(&mut message_specific_accounts);
 
@@ -1847,7 +1690,6 @@ fn derive_specific_its_accounts(
     mint_account: Pubkey,
     token_manager_pda: Pubkey,
     token_program: Pubkey,
-    maybe_timestamp: Option<i64>,
 ) -> Result<Vec<AccountMeta>, ProgramError> {
     let mut specific_accounts = Vec::new();
 
@@ -1857,37 +1699,24 @@ fn derive_specific_its_accounts(
             data,
             ..
         } => {
-            let destination_account = Pubkey::new_from_array(
+            let wallet = Pubkey::new_from_array(
                 (*destination_address)
                     .try_into()
                     .map_err(|_err| ProgramError::InvalidInstructionData)?,
             );
-            let Some(timestamp) = maybe_timestamp else {
-                return Err(ProgramError::InvalidInstructionData);
-            };
-            let epoch = crate::state::flow_limit::flow_epoch_with_timestamp(timestamp)?;
-            let (flow_slot_pda, _) = crate::find_flow_slot_pda(&token_manager_pda, epoch);
 
-            specific_accounts.push(AccountMeta::new(destination_account, false));
-            specific_accounts.push(AccountMeta::new(flow_slot_pda, false));
+            let destination_ata = get_associated_token_address_with_program_id(
+                &wallet,
+                &mint_account,
+                &token_program,
+            );
+
+            specific_accounts.push(AccountMeta::new(wallet, false));
+            specific_accounts.push(AccountMeta::new(destination_ata, false));
 
             if !data.is_empty() {
                 let execute_data = DataPayload::decode(data)
                     .map_err(|_err| ProgramError::InvalidInstructionData)?;
-                let (metadata_account_key, _) =
-                    mpl_token_metadata::accounts::Metadata::find_pda(&mint_account);
-                let program_ata = get_associated_token_address_with_program_id(
-                    &destination_account,
-                    &mint_account,
-                    &token_program,
-                );
-                let interchain_transfer_execute_key =
-                    find_interchain_transfer_execute_pda(&destination_account).0;
-
-                specific_accounts.push(AccountMeta::new(program_ata, false));
-                specific_accounts.push(AccountMeta::new_readonly(mpl_token_metadata::ID, false));
-                specific_accounts.push(AccountMeta::new(metadata_account_key, false));
-                specific_accounts.push(AccountMeta::new(interchain_transfer_execute_key, false));
                 specific_accounts.extend(execute_data.account_meta().iter().cloned());
             }
         }
@@ -2095,13 +1924,8 @@ mod tests {
         let token_program = spl_token_2022::ID;
 
         // This should fail with InvalidInstructionData because minter is not empty but also not 32 bytes
-        let result = derive_specific_its_accounts(
-            &message,
-            mint_account,
-            token_manager_pda,
-            token_program,
-            None,
-        );
+        let result =
+            derive_specific_its_accounts(&message, mint_account, token_manager_pda, token_program);
 
         assert_eq!(result.unwrap_err(), ProgramError::InvalidInstructionData);
     }
@@ -2129,13 +1953,8 @@ mod tests {
         let token_program = spl_token_2022::ID;
 
         // This should succeed because empty minter is allowed
-        let result = derive_specific_its_accounts(
-            &message,
-            mint_account,
-            token_manager_pda,
-            token_program,
-            None,
-        );
+        let result =
+            derive_specific_its_accounts(&message, mint_account, token_manager_pda, token_program);
 
         assert!(result.is_ok());
         let accounts = result.unwrap();
@@ -2169,13 +1988,8 @@ mod tests {
         let token_program = spl_token_2022::ID;
 
         // This should succeed because minter is exactly 32 bytes
-        let result = derive_specific_its_accounts(
-            &message,
-            mint_account,
-            token_manager_pda,
-            token_program,
-            None,
-        );
+        let result =
+            derive_specific_its_accounts(&message, mint_account, token_manager_pda, token_program);
 
         assert!(result.is_ok());
         let accounts = result.unwrap();

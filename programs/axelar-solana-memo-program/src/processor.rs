@@ -65,7 +65,6 @@ pub fn process_message_from_axelar_with_token<'a>(
     let _token_program = next_account_info(accounts_iter)?;
     let _token_mint = next_account_info(accounts_iter)?;
     let _ata_account = next_account_info(accounts_iter)?;
-    let _mpl_token_metadata_program = next_account_info(accounts_iter)?;
     let mpl_token_metadata_account = next_account_info(accounts_iter)?;
     let instruction_accounts = accounts_iter.as_slice();
     let token_metadata = Metadata::from_bytes(&mpl_token_metadata_account.try_borrow_data()?)?;
@@ -74,6 +73,10 @@ pub fn process_message_from_axelar_with_token<'a>(
     msg!("amount: {}", payload.amount);
     msg!("symbol: {}", token_metadata.symbol);
     msg!("name: {}", token_metadata.name);
+    msg!(
+        "payload source address: {}",
+        hex::encode(&payload.source_address)
+    );
 
     let instruction: AxelarMemoInstruction = borsh::from_slice(&payload.data)?;
 
@@ -146,46 +149,6 @@ pub fn process_native_ix(
                     destination_chain,
                     destination_address,
                     memo.into_bytes(),
-                )?,
-                &[
-                    program_account.clone(),
-                    signing_pda_acc.clone(),
-                    gateway_root_pda.clone(),
-                ],
-                &[&[
-                    axelar_solana_gateway::seed_prefixes::CALL_CONTRACT_SIGNING_SEED,
-                    &[signing_pda.1],
-                ]],
-            )?;
-        }
-        AxelarMemoInstruction::SendToGatewayOffchainMemo {
-            memo_hash,
-            destination_chain,
-            destination_address,
-        } => {
-            msg!("Instruction: SendToGatewayOffchainMemo");
-            let program_account = next_account_info(account_info_iter)?;
-            let counter_pda = next_account_info(account_info_iter)?;
-            let signing_pda_acc = next_account_info(account_info_iter)?;
-            let gateway_root_pda = next_account_info(account_info_iter)?;
-            let gateway_program = next_account_info(account_info_iter)?;
-
-            let counter_pda_account = counter_pda.check_initialized_pda::<Counter>(program_id)?;
-            assert_counter_pda_seeds(&counter_pda_account, counter_pda.key);
-            let signing_pda = axelar_solana_gateway::get_call_contract_signing_pda(crate::ID);
-            if &signing_pda.0 != signing_pda_acc.key {
-                msg!("invalid signing PDA");
-                return Err(ProgramError::InvalidAccountData);
-            }
-            invoke_signed(
-                &axelar_solana_gateway::instructions::call_contract_offchain_data(
-                    *gateway_program.key,
-                    *gateway_root_pda.key,
-                    crate::ID,
-                    Some(signing_pda),
-                    destination_chain,
-                    destination_address,
-                    memo_hash,
                 )?,
                 &[
                     program_account.clone(),

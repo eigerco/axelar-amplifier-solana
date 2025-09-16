@@ -1,5 +1,6 @@
-use alloy_primitives::U256;
+use alloy_primitives::{hex, U256};
 use anyhow::anyhow;
+use axelar_solana_gateway_test_fixtures::assert_msg_present_in_logs;
 use borsh::BorshDeserialize;
 use solana_program_test::tokio;
 use solana_sdk::compute_budget::ComputeBudgetInstruction;
@@ -78,7 +79,6 @@ async fn custom_token(
     let register_metadata = axelar_solana_its::instruction::register_token_metadata(
         ctx.solana_wallet,
         custom_solana_token,
-        spl_token_2022::id(),
         0,
     )?;
 
@@ -301,16 +301,28 @@ async fn test_call_contract_with_token(ctx: &mut ItsTestContext) -> anyhow::Resu
         .await?
         .await?;
 
+    let (its_root_pda, _) = axelar_solana_its::find_its_root_pda();
+    let (mint, _) =
+        axelar_solana_its::find_interchain_token_pda(&its_root_pda, &ctx.deployed_interchain_token);
+    let (token_metadata_account, _) = mpl_token_metadata::accounts::Metadata::find_pda(&mint);
+
     let metadata = Bytes::from(
         [
             0_u32.to_le_bytes().as_slice(), // MetadataVersion.CONTRACT_CALL
             &DataPayload::new(
                 &borsh::to_vec(&memo_instruction).unwrap(),
-                &[SolanaAccountRepr {
-                    pubkey: ctx.counter_pda.to_bytes().into(),
-                    is_signer: false,
-                    is_writable: true,
-                }],
+                &[
+                    SolanaAccountRepr {
+                        pubkey: token_metadata_account.to_bytes().into(),
+                        is_signer: false,
+                        is_writable: false,
+                    },
+                    SolanaAccountRepr {
+                        pubkey: ctx.counter_pda.to_bytes().into(),
+                        is_signer: false,
+                        is_writable: true,
+                    },
+                ],
                 EncodingScheme::AbiEncoding,
             )
             .encode()?,
@@ -380,6 +392,11 @@ async fn test_call_contract_with_token(ctx: &mut ItsTestContext) -> anyhow::Resu
         tx.find_log("🐪🐪🐪🐪").is_some(),
         "expected memo not found in logs"
     );
+
+    // Verify that the InterchainTransferReceived event contains the correct source address
+    let expected_hex = hex::encode(ctx.evm_signer.wallet.address().as_bytes());
+    assert_msg_present_in_logs(tx, &format!("payload source address: {expected_hex}"));
+
     let counter_raw_account = ctx
         .solana_chain
         .try_get_account_no_checks(&ctx.counter_pda)

@@ -153,7 +153,6 @@ pub fn process_instruction<'a>(
             gas_value,
             signing_pda_bump,
             None,
-            None,
         ),
         InterchainTokenServiceInstruction::RegisterTokenMetadata {
             gas_value,
@@ -257,26 +256,6 @@ pub fn process_instruction<'a>(
             gas_value,
             signing_pda_bump,
             Some(data),
-            None,
-        ),
-        InterchainTokenServiceInstruction::CallContractWithInterchainTokenOffchainData {
-            token_id,
-            destination_chain,
-            destination_address,
-            amount,
-            payload_hash,
-            gas_value,
-            signing_pda_bump,
-        } => interchain_transfer::process_outbound_transfer(
-            accounts,
-            token_id,
-            destination_chain,
-            destination_address,
-            amount,
-            gas_value,
-            signing_pda_bump,
-            None,
-            Some(payload_hash),
         ),
     }
 }
@@ -349,6 +328,11 @@ fn process_transfer_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -> Program
     let destination_user_account = next_account_info(accounts_iter)?;
     let destination_roles_account = next_account_info(accounts_iter)?;
 
+    if payer.key == destination_user_account.key {
+        msg!("Source and destination accounts are the same");
+        return Err(ProgramError::InvalidArgument);
+    }
+
     msg!("Instruction: TransferOperatorship");
 
     let its_config = InterchainTokenService::load(resource)?;
@@ -415,12 +399,7 @@ fn process_propose_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -> ProgramR
         proposal_account,
     };
 
-    role_management::processor::propose(
-        &crate::id(),
-        role_management_accounts,
-        Roles::OPERATOR,
-        Roles::OPERATOR,
-    )
+    role_management::processor::propose(&crate::id(), role_management_accounts, Roles::OPERATOR)
 }
 
 fn process_accept_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -> ProgramResult {
@@ -447,12 +426,7 @@ fn process_accept_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -> ProgramRe
         proposal_account,
     };
 
-    role_management::processor::accept(
-        &crate::id(),
-        role_management_accounts,
-        Roles::OPERATOR,
-        Roles::empty(),
-    )
+    role_management::processor::accept(&crate::id(), role_management_accounts, Roles::OPERATOR)
 }
 
 fn process_set_pause_status<'a>(accounts: &'a [AccountInfo<'a>], paused: bool) -> ProgramResult {

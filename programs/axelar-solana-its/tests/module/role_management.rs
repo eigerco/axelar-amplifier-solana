@@ -9,7 +9,7 @@ use spl_associated_token_account::{
 };
 use test_context::test_context;
 
-use axelar_solana_gateway_test_fixtures::base::FindLog;
+use axelar_solana_gateway_test_fixtures::{assert_msg_present_in_logs, base::FindLog};
 use axelar_solana_its::{
     instruction::InterchainTokenServiceInstruction, state::token_manager::TokenManager, Roles,
 };
@@ -1234,7 +1234,9 @@ async fn test_prevent_privilege_escalation_through_different_token(ctx: &mut Its
 
     // Verify the transaction failed with an error about derived PDA not matching
     // This validates that the fix works and Bob cannot escalate privileges
-    assert!(tx_metadata.find_log("Derived PDA").is_some());
+    assert!(tx_metadata
+        .find_log("Source and destination accounts are the same")
+        .is_some());
 
     // Ensure that Bob still does not have Minter role on TokenA
     let data = ctx
@@ -1245,4 +1247,333 @@ async fn test_prevent_privilege_escalation_through_different_token(ctx: &mut Its
         .data;
     let bob_roles_token_a = UserRoles::<Roles>::try_from_slice(&data).unwrap();
     assert!(!bob_roles_token_a.contains(Roles::MINTER));
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_fail_add_flow_limiter_to_its_root_config(ctx: &mut ItsTestContext) {
+    let (its_root_pda, _) = axelar_solana_its::find_its_root_pda();
+    let bob = Keypair::new();
+
+    let mut add_flow_limiter_ix = axelar_solana_its::instruction::token_manager::add_flow_limiter(
+        ctx.solana_chain.fixture.payer.pubkey(),
+        [0u8; 32],
+        bob.pubkey(),
+    )
+    .unwrap();
+
+    add_flow_limiter_ix.accounts[4].pubkey = its_root_pda;
+
+    let tx_metadata = ctx
+        .send_solana_tx(&[add_flow_limiter_ix])
+        .await
+        .unwrap_err();
+
+    assert_msg_present_in_logs(tx_metadata, "Resource is not a TokenManager");
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_fail_remove_flow_limiter_from_its_root_config(ctx: &mut ItsTestContext) {
+    let (its_root_pda, _) = axelar_solana_its::find_its_root_pda();
+    let bob = Keypair::new();
+
+    let mut remove_flow_limiter_ix =
+        axelar_solana_its::instruction::token_manager::remove_flow_limiter(
+            ctx.solana_chain.fixture.payer.pubkey(),
+            [0u8; 32],
+            bob.pubkey(),
+        )
+        .unwrap();
+
+    remove_flow_limiter_ix.accounts[4].pubkey = its_root_pda;
+
+    let tx_metadata = ctx
+        .send_solana_tx(&[remove_flow_limiter_ix])
+        .await
+        .unwrap_err();
+
+    assert_msg_present_in_logs(tx_metadata, "Resource is not a TokenManager");
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_fail_double_acceptance_of_role_proposal(ctx: &mut ItsTestContext) {
+    let alice = Keypair::new();
+    let bob = Keypair::new();
+    let charlie = Keypair::new();
+    let token_id = ctx.deployed_interchain_token;
+    let (its_root_pda, _) = axelar_solana_its::find_its_root_pda();
+    let (token_manager_pda, _) =
+        axelar_solana_its::find_token_manager_pda(&its_root_pda, &token_id);
+
+    // Fund accounts
+    ctx.send_solana_tx(&[
+        system_instruction::transfer(
+            &ctx.solana_chain.fixture.payer.pubkey(),
+            &alice.pubkey(),
+            u32::MAX.into(),
+        ),
+        system_instruction::transfer(
+            &ctx.solana_chain.fixture.payer.pubkey(),
+            &bob.pubkey(),
+            u32::MAX.into(),
+        ),
+        system_instruction::transfer(
+            &ctx.solana_chain.fixture.payer.pubkey(),
+            &charlie.pubkey(),
+            u32::MAX.into(),
+        ),
+    ])
+    .await
+    .unwrap();
+
+    // Transfer mintership from payer to Alice so Alice becomes the minter
+    let transfer_mintership_to_alice_ix =
+        axelar_solana_its::instruction::interchain_token::transfer_mintership(
+            ctx.solana_chain.fixture.payer.pubkey(),
+            token_id,
+            alice.pubkey(),
+        )
+        .unwrap();
+
+    ctx.send_solana_tx(&[transfer_mintership_to_alice_ix])
+        .await
+        .unwrap();
+
+    // Alice proposes mintership to Bob
+    let propose_mintership_to_bob_ix =
+        axelar_solana_its::instruction::interchain_token::propose_mintership(
+            alice.pubkey(),
+            token_id,
+            bob.pubkey(),
+        )
+        .unwrap();
+
+    ctx.solana_chain
+        .fixture
+        .send_tx_with_custom_signers(
+            &[propose_mintership_to_bob_ix],
+            &[
+                &alice.insecure_clone(),
+                &ctx.solana_chain.fixture.payer.insecure_clone(),
+            ],
+        )
+        .await
+        .unwrap();
+
+    // Alice proposes mintership to Charlie
+    let propose_mintership_to_charlie_ix =
+        axelar_solana_its::instruction::interchain_token::propose_mintership(
+            alice.pubkey(),
+            token_id,
+            charlie.pubkey(),
+        )
+        .unwrap();
+
+    ctx.solana_chain
+        .fixture
+        .send_tx_with_custom_signers(
+            &[propose_mintership_to_charlie_ix],
+            &[
+                &alice.insecure_clone(),
+                &ctx.solana_chain.fixture.payer.insecure_clone(),
+            ],
+        )
+        .await
+        .unwrap();
+
+    // Bob accepts the proposal (this should succeed and Alice loses minter role)
+    let accept_mintership_bob_ix =
+        axelar_solana_its::instruction::interchain_token::accept_mintership(
+            bob.pubkey(),
+            token_id,
+            alice.pubkey(),
+        )
+        .unwrap();
+
+    ctx.solana_chain
+        .fixture
+        .send_tx_with_custom_signers(
+            &[accept_mintership_bob_ix],
+            &[
+                &bob.insecure_clone(),
+                &ctx.solana_chain.fixture.payer.insecure_clone(),
+            ],
+        )
+        .await
+        .unwrap();
+
+    // Verify Bob has the minter role
+    let (bob_roles_pda, _) = role_management::find_user_roles_pda(
+        &axelar_solana_its::id(),
+        &token_manager_pda,
+        &bob.pubkey(),
+    );
+    let data = ctx
+        .solana_chain
+        .fixture
+        .get_account(&bob_roles_pda, &axelar_solana_its::id())
+        .await
+        .data;
+    let bob_roles = UserRoles::<Roles>::try_from_slice(&data).unwrap();
+    assert!(bob_roles.contains(Roles::MINTER));
+
+    // Verify Alice no longer has the minter role
+    let (alice_roles_pda, _) = role_management::find_user_roles_pda(
+        &axelar_solana_its::id(),
+        &token_manager_pda,
+        &alice.pubkey(),
+    );
+    let data = ctx
+        .solana_chain
+        .fixture
+        .get_account(&alice_roles_pda, &axelar_solana_its::id())
+        .await
+        .data;
+    let alice_roles = UserRoles::<Roles>::try_from_slice(&data).unwrap();
+    assert!(!alice_roles.contains(Roles::MINTER));
+
+    // Charlie tries to accept the proposal (this should fail because Alice no longer has minter role)
+    let accept_mintership_charlie_ix =
+        axelar_solana_its::instruction::interchain_token::accept_mintership(
+            charlie.pubkey(),
+            token_id,
+            alice.pubkey(),
+        )
+        .unwrap();
+
+    let tx_metadata = ctx
+        .solana_chain
+        .fixture
+        .send_tx_with_custom_signers(
+            &[accept_mintership_charlie_ix],
+            &[
+                &charlie.insecure_clone(),
+                &ctx.solana_chain.fixture.payer.insecure_clone(),
+            ],
+        )
+        .await
+        .unwrap_err();
+
+    // Verify the transaction failed because Alice doesn't have the role to transfer anymore
+    assert_msg_present_in_logs(tx_metadata, "User doesn't have the required roles");
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_fail_propose_operatorship_to_self(ctx: &mut ItsTestContext) {
+    // Attempt to propose operatorship to self
+    let propose_to_self_ix = axelar_solana_its::instruction::propose_operatorship(
+        ctx.solana_wallet,
+        ctx.solana_wallet, // Proposing to self
+    )
+    .unwrap();
+
+    let tx_metadata = ctx.send_solana_tx(&[propose_to_self_ix]).await.unwrap_err();
+
+    // Verify the transaction failed with self-transfer error
+    assert_msg_present_in_logs(tx_metadata, "Source and destination accounts are the same");
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_fail_transfer_operatorship_to_self(ctx: &mut ItsTestContext) {
+    // Attempt to transfer operatorship to self
+    let transfer_to_self_ix = axelar_solana_its::instruction::transfer_operatorship(
+        ctx.solana_wallet,
+        ctx.solana_wallet, // Transferring to self
+    )
+    .unwrap();
+
+    let tx_metadata = ctx
+        .send_solana_tx(&[transfer_to_self_ix])
+        .await
+        .unwrap_err();
+
+    // Verify the transaction failed with self-transfer error
+    assert_msg_present_in_logs(tx_metadata, "Source and destination accounts are the same");
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_fail_token_manager_transfer_operatorship_to_self(ctx: &mut ItsTestContext) {
+    let token_id = ctx.deployed_interchain_token;
+
+    // Attempt to transfer token manager operatorship to self
+    let transfer_to_self_ix = axelar_solana_its::instruction::token_manager::transfer_operatorship(
+        ctx.solana_chain.fixture.payer.pubkey(),
+        token_id,
+        ctx.solana_chain.fixture.payer.pubkey(), // Transferring to self
+    )
+    .unwrap();
+
+    let tx_metadata = ctx
+        .send_solana_tx(&[transfer_to_self_ix])
+        .await
+        .unwrap_err();
+
+    // Verify the transaction failed with self-transfer error
+    assert_msg_present_in_logs(tx_metadata, "Source and destination accounts are the same");
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_fail_transfer_mintership_to_self(ctx: &mut ItsTestContext) {
+    let token_id = ctx.deployed_interchain_token;
+
+    // Attempt to transfer mintership to self
+    let transfer_to_self_ix =
+        axelar_solana_its::instruction::interchain_token::transfer_mintership(
+            ctx.solana_chain.fixture.payer.pubkey(),
+            token_id,
+            ctx.solana_chain.fixture.payer.pubkey(), // Transferring to self
+        )
+        .unwrap();
+
+    let tx_metadata = ctx
+        .send_solana_tx(&[transfer_to_self_ix])
+        .await
+        .unwrap_err();
+
+    // Verify the transaction failed with self-transfer error
+    assert_msg_present_in_logs(tx_metadata, "Source and destination accounts are the same");
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_fail_propose_token_manager_operatorship_to_self(ctx: &mut ItsTestContext) {
+    let token_id = ctx.deployed_interchain_token;
+
+    // Attempt to propose token manager operatorship to self
+    let propose_to_self_ix = axelar_solana_its::instruction::token_manager::propose_operatorship(
+        ctx.solana_chain.fixture.payer.pubkey(),
+        token_id,
+        ctx.solana_chain.fixture.payer.pubkey(), // Proposing to self
+    )
+    .unwrap();
+
+    let tx_metadata = ctx.send_solana_tx(&[propose_to_self_ix]).await.unwrap_err();
+
+    // Verify the transaction failed with self-transfer error
+    assert_msg_present_in_logs(tx_metadata, "Source and destination accounts are the same");
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_fail_propose_mintership_to_self(ctx: &mut ItsTestContext) {
+    let token_id = ctx.deployed_interchain_token;
+
+    // Attempt to propose mintership to self
+    let propose_to_self_ix = axelar_solana_its::instruction::interchain_token::propose_mintership(
+        ctx.solana_chain.fixture.payer.pubkey(),
+        token_id,
+        ctx.solana_chain.fixture.payer.pubkey(), // Proposing to self
+    )
+    .unwrap();
+
+    let tx_metadata = ctx.send_solana_tx(&[propose_to_self_ix]).await.unwrap_err();
+
+    // Verify the transaction failed with self-transfer error
+    assert_msg_present_in_logs(tx_metadata, "Source and destination accounts are the same");
 }

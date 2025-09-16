@@ -17,6 +17,7 @@ use solana_program::program_option::COption;
 use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
 use solana_program::{msg, system_program};
+use spl_associated_token_account::get_associated_token_address_with_program_id;
 use spl_token_2022::check_spl_token_program_account;
 use spl_token_2022::extension::{BaseStateWithExtensions, ExtensionType, StateWithExtensions};
 use spl_token_2022::instruction::AuthorityType;
@@ -40,7 +41,7 @@ pub(crate) fn set_flow_limit(
     )?;
 
     let mut token_manager = TokenManager::load(accounts.token_manager_pda)?;
-    token_manager.flow_limit = flow_limit;
+    token_manager.flow_slot.flow_limit = flow_limit;
     token_manager.store(
         accounts.flow_limiter,
         accounts.token_manager_pda,
@@ -251,17 +252,21 @@ pub(crate) fn validate_mint_extensions(
     let mint_data = token_mint.try_borrow_data()?;
     let mint = StateWithExtensions::<Mint>::unpack(&mint_data)?;
 
-    if ty == token_manager::Type::LockUnlockFee
-        && !mint
-            .get_extension_types()?
-            .contains(&ExtensionType::TransferFeeConfig)
-    {
-        msg!("The mint is not compatible with the LockUnlockFee TokenManager type, please make sure the mint has the TransferFeeConfig extension initialized");
-        return Err(ProgramError::InvalidAccountData);
+    if matches!(
+        (
+            ty,
+            mint.get_extension_types()?
+                .contains(&ExtensionType::TransferFeeConfig)
+        ),
+        (token_manager::Type::LockUnlock, true) | (token_manager::Type::LockUnlockFee, false)
+    ) {
+        msg!("The mint is not compatible with the type");
+        return Err(ProgramError::InvalidInstructionData);
     }
 
     Ok(())
 }
+
 pub(crate) fn validate_token_manager_type(
     ty: token_manager::Type,
     token_mint: &AccountInfo<'_>,
@@ -393,6 +398,15 @@ impl Validate for DeployTokenManagerAccounts<'_> {
         check_spl_token_program_account(self.token_program.key)?;
         validate_spl_associated_token_account_key(self.ata_program.key)?;
         validate_rent_key(self.rent_sysvar.key)?;
+        if &get_associated_token_address_with_program_id(
+            &self.token_manager_pda.key,
+            &self.token_mint.key,
+            &self.token_program.key,
+        ) != self.token_manager_ata.key
+        {
+            msg!("Wrong ata account key");
+            return Err(ProgramError::InvalidAccountData);
+        }
         Ok(())
     }
 }
@@ -461,6 +475,9 @@ impl<'a> FromAccountInfoSlice<'a> for SetFlowLimitAccounts<'a> {
 impl Validate for SetFlowLimitAccounts<'_> {
     fn validate(&self) -> Result<(), ProgramError> {
         validate_system_account_key(self.system_account.key)?;
+
+        let its_config_account = InterchainTokenService::load(self.its_root_pda)?;
+        assert_valid_its_root_pda(self.its_root_pda, its_config_account.bump)?;
         Ok(())
     }
 }
@@ -469,12 +486,23 @@ pub(crate) fn process_add_flow_limiter<'a>(accounts: &'a [AccountInfo<'a>]) -> P
     msg!("Instruction: AddTokenManagerFlowLimiter");
 
     let accounts_iter = &mut accounts.iter();
+    let its_config_account = next_account_info(accounts_iter)?;
     let system_account = next_account_info(accounts_iter)?;
     let payer = next_account_info(accounts_iter)?;
     let payer_roles_account = next_account_info(accounts_iter)?;
     let resource = next_account_info(accounts_iter)?;
     let destination_user_account = next_account_info(accounts_iter)?;
     let destination_roles_account = next_account_info(accounts_iter)?;
+
+    let its_config = InterchainTokenService::load(its_config_account)?;
+    assert_valid_its_root_pda(its_config_account, its_config.bump)?;
+    if resource.key == its_config_account.key {
+        msg!("Resource is not a TokenManager");
+        return Err(ProgramError::InvalidAccountData);
+    }
+
+    // Ensure resource is a `TokenManager`
+    TokenManager::load(resource)?;
 
     let role_management_accounts = RoleAddAccounts {
         system_account,
@@ -497,12 +525,23 @@ pub(crate) fn process_remove_flow_limiter<'a>(accounts: &'a [AccountInfo<'a>]) -
     msg!("Instruction: RemoveTokenManagerFlowLimiter");
 
     let accounts_iter = &mut accounts.iter();
+    let its_config_account = next_account_info(accounts_iter)?;
     let system_account = next_account_info(accounts_iter)?;
     let payer = next_account_info(accounts_iter)?;
     let payer_roles_account = next_account_info(accounts_iter)?;
     let resource = next_account_info(accounts_iter)?;
     let origin_user_account = next_account_info(accounts_iter)?;
     let origin_roles_account = next_account_info(accounts_iter)?;
+
+    let its_config = InterchainTokenService::load(its_config_account)?;
+    assert_valid_its_root_pda(its_config_account, its_config.bump)?;
+    if resource.key == its_config_account.key {
+        msg!("Resource is not a TokenManager");
+        return Err(ProgramError::InvalidAccountData);
+    }
+
+    // Ensure resource is a `TokenManager`
+    TokenManager::load(resource)?;
 
     let role_management_accounts = RoleRemoveAccounts {
         system_account,
@@ -546,6 +585,11 @@ pub(crate) fn process_transfer_operatorship<'a>(accounts: &'a [AccountInfo<'a>])
     let token_manager_account = next_account_info(accounts_iter)?;
     let destination_user_account = next_account_info(accounts_iter)?;
     let destination_roles_account = next_account_info(accounts_iter)?;
+
+    if payer.key == destination_user_account.key {
+        msg!("Source and destination accounts are the same");
+        return Err(ProgramError::InvalidArgument);
+    }
 
     let its_config = InterchainTokenService::load(its_config_account)?;
     let token_manager = TokenManager::load(token_manager_account)?;
@@ -625,12 +669,7 @@ pub(crate) fn process_propose_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) 
         token_manager.bump,
     )?;
 
-    role_management::processor::propose(
-        &crate::id(),
-        role_management_accounts,
-        Roles::OPERATOR,
-        Roles::OPERATOR,
-    )
+    role_management::processor::propose(&crate::id(), role_management_accounts, Roles::OPERATOR)
 }
 
 pub(crate) fn process_accept_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -> ProgramResult {
@@ -645,6 +684,11 @@ pub(crate) fn process_accept_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -
     let origin_user_account = next_account_info(accounts_iter)?;
     let origin_roles_account = next_account_info(accounts_iter)?;
     let proposal_account = next_account_info(accounts_iter)?;
+
+    if payer.key == origin_user_account.key {
+        msg!("Source and destination accounts are the same");
+        return Err(ProgramError::InvalidArgument);
+    }
 
     let role_management_accounts = RoleTransferWithProposalAccounts {
         system_account,
@@ -668,10 +712,5 @@ pub(crate) fn process_accept_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -
         token_manager.bump,
     )?;
 
-    role_management::processor::accept(
-        &crate::id(),
-        role_management_accounts,
-        Roles::OPERATOR,
-        Roles::empty(),
-    )
+    role_management::processor::accept(&crate::id(), role_management_accounts, Roles::OPERATOR)
 }

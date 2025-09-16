@@ -3,15 +3,18 @@ use std::sync::Arc;
 use axelar_solana_encoding::types::messages::Messages;
 use axelar_solana_encoding::types::payload::Payload;
 use axelar_solana_encoding::types::pubkey::{PublicKey, Signature};
+use axelar_solana_gateway::error::GatewayError;
 use axelar_solana_gateway::state::signature_verification::verify_ecdsa_signature;
 use axelar_solana_gateway_test_fixtures::base::FindLog;
 use axelar_solana_gateway_test_fixtures::gateway::{
-    make_verifier_set, random_bytes, random_message,
+    make_verifier_set, random_bytes, random_message, GetGatewayError,
 };
 use axelar_solana_gateway_test_fixtures::test_signer::{random_ecdsa_keypair, SigningVerifierSet};
 use axelar_solana_gateway_test_fixtures::SolanaAxelarIntegration;
 use solana_program_test::tokio;
 use solana_sdk::compute_budget::ComputeBudgetInstruction;
+use solana_sdk::signer::Signer;
+use solana_sdk::system_instruction;
 
 #[tokio::test]
 #[rstest::rstest]
@@ -22,7 +25,6 @@ async fn test_verify_one_signature(
     #[case] messages: Messages,
 ) {
     // Setup
-
     let mut metadata = SolanaAxelarIntegration::builder()
         .initial_signer_weights(initial_signer_weights.clone())
         .build()
@@ -383,10 +385,11 @@ fn can_verify_signatures_with_ecrecover_recovery_id() {
     let (keypair, pubkey) = random_ecdsa_keypair();
     let message_hash = [42; 32];
     let signature = keypair.sign(&message_hash);
-    let Signature::EcdsaRecoverable(mut signature) = signature else {
+    let Signature::EcdsaRecoverable(signature) = signature else {
         panic!("unexpected signature type");
     };
-    signature[64] += 27;
+    // The test signer generates signatures with recovery IDs 27-28 (Ethereum format)
+    assert!((27_u8..=28_u8).contains(&signature[64]));
     let PublicKey::Secp256k1(pubkey) = pubkey else {
         panic!("unexpected pubkey type");
     };
@@ -403,11 +406,134 @@ fn can_verify_signatures_with_standard_recovery_id() {
     let Signature::EcdsaRecoverable(signature) = signature else {
         panic!("unexpected signature type");
     };
-    assert!((0_u8..=3_u8).contains(&signature[64]));
+    // The test signer generates signatures with recovery IDs 27-28 (Ethereum format)
+    assert!((27_u8..=28_u8).contains(&signature[64]));
     let PublicKey::Secp256k1(pubkey) = pubkey else {
         panic!("unexpected pubkey type");
     };
 
     let is_valid = verify_ecdsa_signature(&pubkey, &signature, &message_hash);
     assert!(is_valid);
+}
+
+#[tokio::test]
+async fn fails_to_verify_signature_with_invalid_domain_separator() {
+    // Setup
+    let mut metadata = SolanaAxelarIntegration::builder()
+        .initial_signer_weights(vec![42, 42])
+        .build()
+        .setup()
+        .await;
+
+    let payload = Payload::Messages(Messages(vec![random_message()]));
+    let execute_data = metadata.construct_execute_data(&metadata.signers.clone(), payload);
+    metadata
+        .initialize_payload_verification_session(&execute_data)
+        .await
+        .unwrap();
+    let verifier_set_tracker_pda = metadata.signers.verifier_set_tracker().0;
+    let mut leaf_info = execute_data
+        .signing_verifier_set_leaves
+        .first()
+        .unwrap()
+        .clone();
+
+    // Modify the domain separator to simulate a cross-chain replay attack
+    leaf_info.leaf.domain_separator[0] = leaf_info.leaf.domain_separator[0].wrapping_add(1);
+
+    // Attempt to verify the signature with different domain separator
+    let ix = axelar_solana_gateway::instructions::verify_signature(
+        metadata.gateway_root_pda,
+        verifier_set_tracker_pda,
+        execute_data.payload_merkle_root,
+        leaf_info,
+    )
+    .unwrap();
+
+    let tx_result = metadata
+        .send_tx(&[
+            // native digital signature verification won't work without bumping the compute budget.
+            ComputeBudgetInstruction::set_compute_unit_limit(260_000),
+            ix,
+        ])
+        .await
+        .unwrap_err();
+
+    // Should fail due to domain separator mismatch
+    let gateway_error = tx_result.get_gateway_error().unwrap();
+    assert_eq!(gateway_error, GatewayError::InvalidDomainSeparator);
+}
+
+#[tokio::test]
+async fn test_verify_all_signatures_when_session_pda_has_lamports() {
+    // Setup
+    let messages = Messages(vec![random_message(); 5]);
+    let payload = Payload::Messages(messages);
+    let amount_of_signers = 64;
+    let init_signer_weights = vec![42; amount_of_signers];
+    let mut metadata = SolanaAxelarIntegration::builder()
+        // 64 signers
+        .initial_signer_weights(init_signer_weights)
+        .build()
+        .setup()
+        .await;
+    let execute_data = metadata.construct_execute_data(&metadata.signers.clone(), payload);
+
+    let (verification_session_pda, _) =
+        axelar_solana_gateway::get_signature_verification_pda(&execute_data.payload_merkle_root);
+    let payer = metadata.fixture.payer.pubkey();
+
+    // Transfer lamports to the PDA to try to prevent its initialization
+    metadata
+        .send_tx(&[system_instruction::transfer(
+            &payer,
+            &verification_session_pda,
+            100000000000,
+        )])
+        .await
+        .unwrap();
+
+    metadata
+        .initialize_payload_verification_session(&execute_data)
+        .await
+        .unwrap();
+    let verifier_set_tracker_pda = metadata.signers.verifier_set_tracker().0;
+
+    for verifier_set_leaf in execute_data.signing_verifier_set_leaves {
+        // Verify the signature
+        let ix = axelar_solana_gateway::instructions::verify_signature(
+            metadata.gateway_root_pda,
+            verifier_set_tracker_pda,
+            execute_data.payload_merkle_root,
+            verifier_set_leaf,
+        )
+        .unwrap();
+        metadata
+            .send_tx(&[
+                ComputeBudgetInstruction::set_compute_unit_limit(260_000),
+                ix,
+            ])
+            .await
+            .unwrap();
+    }
+
+    // Check that the PDA contains the expected data
+    let (verification_pda, bump) =
+        axelar_solana_gateway::get_signature_verification_pda(&execute_data.payload_merkle_root);
+
+    let session = metadata
+        .signature_verification_session(verification_pda)
+        .await;
+
+    assert_eq!(session.bump, bump);
+    let mut slots = session.signature_verification.slots_iter();
+    assert!(
+        slots.by_ref().take(amount_of_signers).all(|slot| slot),
+        "slot for verified signatures should be set"
+    );
+    assert!(slots.all(|slot| !slot), "remaining slots should be unset");
+    assert!(
+        session.signature_verification.is_valid(),
+        "session should be valid after all signatures are verified"
+    );
 }

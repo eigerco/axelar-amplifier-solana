@@ -398,6 +398,11 @@ impl Validate for DeployTokenManagerAccounts<'_> {
         check_spl_token_program_account(self.token_program.key)?;
         validate_spl_associated_token_account_key(self.ata_program.key)?;
         validate_rent_key(self.rent_sysvar.key)?;
+
+        if !self.payer.is_signer {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+
         if &get_associated_token_address_with_program_id(
             self.token_manager_pda.key,
             self.token_mint.key,

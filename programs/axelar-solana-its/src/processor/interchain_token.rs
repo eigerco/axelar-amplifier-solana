@@ -677,6 +677,7 @@ pub(crate) fn approve_deploy_remote_interchain_token(
     validate_system_account_key(system_account.key)?;
     msg!("Instruction: ApproveDeployRemoteInterchainToken");
 
+    // This also ensures payer.is_signer == true
     ensure_signer_roles(
         &crate::id(),
         token_manager_account,
@@ -695,7 +696,11 @@ pub(crate) fn approve_deploy_remote_interchain_token(
         token_manager.bump,
     )?;
 
-    let (_, bump) = crate::find_deployment_approval_pda(payer.key, &token_id, &destination_chain);
+    let (deploy_approval_pda, bump) =
+        crate::find_deployment_approval_pda(payer.key, &token_id, &destination_chain);
+    if deploy_approval_pda != *deploy_approval_account.key {
+        return Err(ProgramError::InvalidAccountData);
+    }
 
     let approval = DeployApproval {
         approved_destination_minter: solana_program::keccak::hash(&destination_minter).to_bytes(),

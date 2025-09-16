@@ -44,6 +44,7 @@ use crate::{
 
 #[derive(Debug)]
 pub(crate) struct DeployInterchainTokenAccounts<'a> {
+    pub(crate) payer: &'a AccountInfo<'a>,
     pub(crate) system_account: &'a AccountInfo<'a>,
     pub(crate) its_root_pda: &'a AccountInfo<'a>,
     pub(crate) token_manager_pda: &'a AccountInfo<'a>,
@@ -69,22 +70,47 @@ impl Validate for DeployInterchainTokenAccounts<'_> {
         validate_rent_key(self.rent_sysvar.key)?;
         validate_sysvar_instructions_key(self.sysvar_instructions.key)?;
         validate_mpl_token_metadata_key(self.mpl_token_metadata_program.key)?;
+        spl_token_2022::check_program_account(self.token_program.key)?;
+
+        // If it's a cross-chain message, payer_ata is not set (i.e., is set to program id)
+        if *self.payer_ata.key != crate::id() {
+            crate::assert_valid_ata(
+                self.payer_ata.key,
+                self.token_program.key,
+                self.token_mint.key,
+                self.payer.key,
+            )?;
+        }
+
+        crate::assert_valid_ata(
+            self.token_manager_ata.key,
+            self.token_program.key,
+            self.token_mint.key,
+            self.token_manager_pda.key,
+        )?;
+
         Ok(())
     }
 }
 
 impl<'a> FromAccountInfoSlice<'a> for DeployInterchainTokenAccounts<'a> {
-    type Context = ();
+    type Context = Option<&'a AccountInfo<'a>>;
     fn extract_accounts(
         accounts: &'a [AccountInfo<'a>],
-        _context: &Self::Context,
+        maybe_payer: &Self::Context,
     ) -> Result<Self, ProgramError>
     where
         Self: Sized + Validate,
     {
         let accounts_iter = &mut accounts.iter();
+        let payer = if let Some(payer) = maybe_payer {
+            payer
+        } else {
+            next_account_info(accounts_iter)?
+        };
 
         Ok(Self {
+            payer,
             system_account: next_account_info(accounts_iter)?,
             its_root_pda: next_account_info(accounts_iter)?,
             token_manager_pda: next_account_info(accounts_iter)?,
@@ -107,6 +133,7 @@ impl<'a> FromAccountInfoSlice<'a> for DeployInterchainTokenAccounts<'a> {
 impl<'a> From<DeployInterchainTokenAccounts<'a>> for DeployTokenManagerAccounts<'a> {
     fn from(value: DeployInterchainTokenAccounts<'a>) -> Self {
         Self {
+            payer: value.payer,
             system_account: value.system_account,
             its_root_pda: value.its_root_pda,
             token_manager_pda: value.token_manager_pda,
@@ -130,14 +157,9 @@ pub(crate) fn process_deploy<'a>(
     decimals: u8,
     initial_supply: u64,
 ) -> ProgramResult {
-    let (payer, other_accounts) = accounts
-        .split_first()
-        .ok_or(ProgramError::InvalidInstructionData)?;
-
-    let deploy_salt = crate::interchain_token_deployer_salt(payer.key, &salt);
+    let parsed_accounts = DeployInterchainTokenAccounts::from_account_info_slice(accounts, &None)?;
+    let deploy_salt = crate::interchain_token_deployer_salt(parsed_accounts.payer.key, &salt);
     let token_id = crate::interchain_token_id_internal(&deploy_salt);
-    let parsed_accounts =
-        DeployInterchainTokenAccounts::from_account_info_slice(other_accounts, &())?;
     if initial_supply.is_zero() && parsed_accounts.minter.is_none() {
         return Err(ProgramError::InvalidArgument);
     }
@@ -151,13 +173,12 @@ pub(crate) fn process_deploy<'a>(
 
     event::InterchainTokenIdClaimed {
         token_id,
-        deployer: *payer.key,
+        deployer: *parsed_accounts.payer.key,
         salt: deploy_salt,
     }
     .emit();
 
     process_inbound_deploy(
-        payer,
         parsed_accounts,
         token_id,
         name,
@@ -172,7 +193,6 @@ pub(crate) fn process_deploy<'a>(
 }
 
 pub(crate) fn process_inbound_deploy<'a>(
-    payer: &'a AccountInfo<'a>,
     accounts: DeployInterchainTokenAccounts<'a>,
     token_id: [u8; 32],
     name: String,
@@ -199,7 +219,6 @@ pub(crate) fn process_inbound_deploy<'a>(
     }
 
     setup_mint(
-        payer,
         &accounts,
         decimals,
         &token_id,
@@ -214,7 +233,6 @@ pub(crate) fn process_inbound_deploy<'a>(
     truncated_symbol.truncate(mpl_token_metadata::MAX_SYMBOL_LENGTH);
 
     setup_metadata(
-        payer,
         &accounts,
         &token_id,
         truncated_name.clone(),
@@ -236,7 +254,6 @@ pub(crate) fn process_inbound_deploy<'a>(
 
     let deploy_token_manager_accounts = DeployTokenManagerAccounts::from(accounts);
     super::token_manager::deploy(
-        payer,
         &deploy_token_manager_accounts,
         &deploy_token_manager,
         token_manager_pda_bump,
@@ -533,7 +550,6 @@ pub(crate) fn process_mint<'a>(accounts: &'a [AccountInfo<'a>], amount: u64) -> 
 }
 
 fn setup_mint<'a>(
-    payer: &AccountInfo<'a>,
     accounts: &DeployInterchainTokenAccounts<'a>,
     decimals: u8,
     token_id: &[u8],
@@ -542,7 +558,7 @@ fn setup_mint<'a>(
     initial_supply: u64,
 ) -> ProgramResult {
     init_pda_raw(
-        payer,
+        accounts.payer,
         accounts.token_mint,
         accounts.token_program.key,
         accounts.system_account,
@@ -575,10 +591,10 @@ fn setup_mint<'a>(
 
     if initial_supply > 0 {
         crate::create_associated_token_account_idempotent(
-            payer,
+            accounts.payer,
             accounts.token_mint,
             accounts.payer_ata,
-            payer,
+            accounts.payer,
             accounts.system_account,
             accounts.token_program,
         )?;
@@ -593,7 +609,7 @@ fn setup_mint<'a>(
                 initial_supply,
             )?,
             &[
-                payer.clone(),
+                accounts.payer.clone(),
                 accounts.token_mint.clone(),
                 accounts.payer_ata.clone(),
                 accounts.token_manager_pda.clone(),
@@ -612,7 +628,6 @@ fn setup_mint<'a>(
 }
 
 fn setup_metadata<'a>(
-    payer: &AccountInfo<'a>,
     accounts: &DeployInterchainTokenAccounts<'a>,
     token_id: &[u8],
     name: String,
@@ -626,7 +641,7 @@ fn setup_metadata<'a>(
         .mint(accounts.token_mint, false)
         .authority(accounts.token_manager_pda)
         .update_authority(accounts.token_manager_pda, true)
-        .payer(payer)
+        .payer(accounts.payer)
         .is_mutable(false)
         .name(name)
         .symbol(symbol)

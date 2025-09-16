@@ -84,7 +84,6 @@ impl DeployTokenManagerInternal {
 /// An error occurred when deploying the [`TokenManager`] PDA. The reason can be
 /// derived from the logs.
 pub(crate) fn deploy<'a>(
-    payer: &'a AccountInfo<'a>,
     accounts: &DeployTokenManagerAccounts<'a>,
     deploy_token_manager: &DeployTokenManagerInternal,
     token_manager_pda_bump: u8,
@@ -94,7 +93,7 @@ pub(crate) fn deploy<'a>(
     validate_mint_extensions(deploy_token_manager.manager_type, accounts.token_mint)?;
 
     crate::create_associated_token_account_idempotent(
-        payer,
+        accounts.payer,
         accounts.token_mint,
         accounts.token_manager_ata,
         accounts.token_manager_pda,
@@ -122,7 +121,7 @@ pub(crate) fn deploy<'a>(
         }
 
         setup_roles(
-            payer,
+            accounts.payer,
             accounts.token_manager_pda,
             operator.key,
             operator_roles_pda,
@@ -132,7 +131,7 @@ pub(crate) fn deploy<'a>(
     }
 
     setup_roles(
-        payer,
+        accounts.payer,
         accounts.token_manager_pda,
         accounts.its_root_pda.key,
         accounts.its_roles_pda,
@@ -150,7 +149,7 @@ pub(crate) fn deploy<'a>(
     token_manager.init(
         &crate::id(),
         accounts.system_account,
-        payer,
+        accounts.payer,
         accounts.token_manager_pda,
         &[
             seed_prefixes::TOKEN_MANAGER_SEED,
@@ -379,6 +378,7 @@ pub(crate) fn handover_mint_authority(
 
 #[derive(Debug)]
 pub(crate) struct DeployTokenManagerAccounts<'a> {
+    pub(crate) payer: &'a AccountInfo<'a>,
     pub(crate) system_account: &'a AccountInfo<'a>,
     pub(crate) its_root_pda: &'a AccountInfo<'a>,
     pub(crate) token_manager_pda: &'a AccountInfo<'a>,
@@ -412,18 +412,24 @@ impl Validate for DeployTokenManagerAccounts<'_> {
 }
 
 impl<'a> FromAccountInfoSlice<'a> for DeployTokenManagerAccounts<'a> {
-    type Context = ();
+    type Context = Option<&'a AccountInfo<'a>>;
 
     fn extract_accounts(
         accounts: &'a [AccountInfo<'a>],
-        _context: &Self::Context,
+        maybe_payer: &Self::Context,
     ) -> Result<Self, ProgramError>
     where
         Self: Sized + Validate,
     {
         let accounts_iter = &mut accounts.iter();
+        let payer = if let Some(payer) = maybe_payer {
+            payer
+        } else {
+            next_account_info(accounts_iter)?
+        };
 
         Ok(Self {
+            payer,
             system_account: next_account_info(accounts_iter)?,
             its_root_pda: next_account_info(accounts_iter)?,
             token_manager_pda: next_account_info(accounts_iter)?,

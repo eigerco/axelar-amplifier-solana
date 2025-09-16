@@ -369,6 +369,11 @@ impl Validate for DeployTokenManagerAccounts<'_> {
             return Err(ProgramError::MissingRequiredSignature);
         }
 
+        if self.token_program.key != self.token_mint.owner {
+            msg!("Mint and program account mismatch");
+            return Err(ProgramError::IncorrectProgramId);
+        }
+
         if &get_associated_token_address_with_program_id(
             self.token_manager_pda.key,
             self.token_mint.key,

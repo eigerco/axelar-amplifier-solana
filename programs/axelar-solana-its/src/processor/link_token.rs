@@ -299,6 +299,12 @@ fn register_token<'a>(
     let token_id = crate::interchain_token_id_internal(&deploy_salt);
     let (_, token_manager_pda_bump) =
         crate::find_token_manager_pda(parsed_accounts.its_root_pda.key, &token_id);
+    crate::assert_valid_token_manager_pda(
+        parsed_accounts.token_manager_pda,
+        parsed_accounts.its_root_pda.key,
+        &token_id,
+        token_manager_pda_bump,
+    )?;
 
     event::InterchainTokenIdClaimed {
         token_id,

@@ -143,7 +143,7 @@ pub(crate) fn process_inbound_transfer<'a>(
     .emit();
 
     if !payload.data.is_empty() {
-        let program_account = parsed_accounts.destination_account;
+        let program_account = parsed_accounts.destination;
         let system_account = parsed_accounts.system_account;
         if !program_account.executable {
             return Err(ProgramError::InvalidInstructionData);

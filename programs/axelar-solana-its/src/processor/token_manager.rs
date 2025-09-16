@@ -2,8 +2,8 @@
 
 use event_utils::Event as _;
 use program_utils::{
-    pda::{BorshPda, ValidPDA},
-    validate_rent_key, validate_spl_associated_token_account_key, validate_system_account_key,
+    pda::BorshPda, validate_rent_key, validate_spl_associated_token_account_key,
+    validate_system_account_key,
 };
 use role_management::processor::{
     ensure_roles, RoleAddAccounts, RoleRemoveAccounts, RoleTransferWithProposalAccounts,
@@ -11,12 +11,12 @@ use role_management::processor::{
 use role_management::state::UserRoles;
 use solana_program::account_info::{next_account_info, AccountInfo};
 use solana_program::entrypoint::ProgramResult;
+use solana_program::msg;
 use solana_program::program::invoke;
 use solana_program::program_error::ProgramError;
 use solana_program::program_option::COption;
 use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
-use solana_program::{msg, system_program};
 use spl_associated_token_account::get_associated_token_address_with_program_id;
 use spl_token_2022::check_spl_token_program_account;
 use spl_token_2022::extension::{BaseStateWithExtensions, ExtensionType, StateWithExtensions};
@@ -89,7 +89,6 @@ pub(crate) fn deploy<'a>(
     token_manager_pda_bump: u8,
 ) -> ProgramResult {
     msg!("Instruction: TM Deploy");
-    check_accounts(accounts)?;
     validate_mint_extensions(deploy_token_manager.manager_type, accounts.token_mint)?;
 
     crate::create_associated_token_account_idempotent(
@@ -206,39 +205,6 @@ fn setup_roles<'a>(
                 &[user_roles_pda_bump],
             ],
         )?;
-    }
-
-    Ok(())
-}
-
-fn check_accounts(accounts: &DeployTokenManagerAccounts<'_>) -> ProgramResult {
-    if !system_program::check_id(accounts.system_account.key) {
-        msg!("Invalid system account provided");
-        return Err(ProgramError::IncorrectProgramId);
-    }
-
-    if accounts
-        .token_manager_pda
-        .check_uninitialized_pda()
-        .is_err()
-    {
-        msg!("TokenManager PDA is already initialized");
-        return Err(ProgramError::AccountAlreadyInitialized);
-    }
-
-    if spl_token_2022::check_spl_token_program_account(accounts.token_mint.owner).is_err() {
-        msg!("Invalid token mint account provided");
-        return Err(ProgramError::InvalidAccountData);
-    }
-
-    if accounts.token_program.key != accounts.token_mint.owner {
-        msg!("Mint and program account mismatch");
-        return Err(ProgramError::IncorrectProgramId);
-    }
-
-    if !spl_associated_token_account::check_id(accounts.ata_program.key) {
-        msg!("Invalid associated token account program provided");
-        return Err(ProgramError::IncorrectProgramId);
     }
 
     Ok(())

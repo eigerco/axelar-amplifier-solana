@@ -276,8 +276,14 @@ pub(crate) fn handover_mint_authority(
     let token_program = next_account_info(accounts_iter)?;
     let system_account = next_account_info(accounts_iter)?;
 
-    validate_system_account_key(system_account.key)?;
     msg!("Instruction: HandoverMintAuthority");
+
+    validate_system_account_key(system_account.key)?;
+
+    if !payer.is_signer {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+
     let its_root_config = InterchainTokenService::load(its_root)?;
     let token_manager_config = TokenManager::load(token_manager)?;
 
@@ -288,6 +294,10 @@ pub(crate) fn handover_mint_authority(
         &token_id,
         token_manager_config.bump,
     )?;
+
+    if token_program.key != mint.owner {
+        return Err(ProgramError::InvalidAccountData);
+    }
 
     if token_manager_config.token_address != *mint.key {
         msg!("TokenManager PDA does not match the provided Mint account");

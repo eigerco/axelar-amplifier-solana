@@ -6,9 +6,6 @@ edition = "2021"
 [lints]
 workspace = true
 
-[lib]
-crate-type = ["cdylib", "lib"]
-
 [dependencies]
 borsh.workspace = true
 bytemuck.workspace = true
@@ -17,9 +14,6 @@ serde.workspace = true
 thiserror.workspace = true
 bs58 = "0.5"
 sha2 = "0.10.9"
-proc-macro2 = "1"
-quote = "1"
-syn = { version = "1", features = ["full"] }
 
 [dev-dependencies]
 solana-sdk.workspace = true

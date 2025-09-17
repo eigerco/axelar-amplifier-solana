@@ -287,6 +287,10 @@ fn process_initialize(
     its_root_pda_account.check_uninitialized_pda()?;
 
     let (its_root_pda, its_root_pda_bump) = crate::find_its_root_pda();
+    if its_root_pda != *its_root_pda_account.key {
+        return Err(ProgramError::InvalidAccountData);
+    }
+
     let its_root_config =
         InterchainTokenService::new(its_root_pda_bump, chain_name, its_hub_address);
     its_root_config.init(

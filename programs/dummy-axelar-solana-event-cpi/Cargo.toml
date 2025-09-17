@@ -1,0 +1,40 @@
+[package]
+name = "adummy-axelar-solana-event-cpi"
+version = "0.1.0"
+description = "Utility program to test Event CPI functionality"
+edition = "2021"
+
+[lib]
+name = "dummy_axelar_solana_event_cpi"
+crate-type = ["cdylib", "lib"]
+
+[features]
+no-entrypoint = []
+devnet-amplifier = [
+    "program-utils/devnet-amplifier"
+]
+stagenet = [
+    "program-utils/stagenet"
+]
+testnet = [
+    "program-utils/testnet"
+]
+mainnet = [
+    "program-utils/mainnet"
+]
+default = ["devnet-amplifier"]
+
+[dependencies]
+borsh.workspace = true
+hex.workspace = true
+mpl-token-metadata.workspace = true
+program-utils = { workspace = true, default-features = false }
+solana-program.workspace = true
+
+[dev-dependencies]
+solana-program-test.workspace = true
+solana-sdk.workspace = true
+pretty_assertions.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true

@@ -25,26 +25,4 @@ impl InterchainTransferExecute {
     }
 }
 
-impl Pack for InterchainTransferExecute {
-    const LEN: usize = size_of::<u8>();
-
-    #[allow(clippy::unwrap_used)]
-    fn pack_into_slice(&self, mut dst: &mut [u8]) {
-        self.serialize(&mut dst).unwrap();
-    }
-
-    fn unpack_from_slice(src: &[u8]) -> Result<Self, solana_program::program_error::ProgramError> {
-        let mut mut_src: &[u8] = src;
-        Self::deserialize(&mut mut_src).map_err(|err| {
-            msg!(
-                "Error: failed to deserialize account as {}: {}",
-                type_name::<Self>(),
-                err
-            );
-            ProgramError::InvalidAccountData
-        })
-    }
-}
-
-impl Sealed for InterchainTransferExecute {}
 impl BorshPda for InterchainTransferExecute {}

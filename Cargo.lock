@@ -34,6 +34,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 
 [[package]]
+name = "adummy-axelar-solana-event-cpi"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "borsh 1.5.7",
+ "hex",
+ "mpl-token-metadata",
+ "pretty_assertions",
+ "program-utils",
+ "serde_json",
+ "solana-program",
+ "solana-program-test",
+ "solana-sdk",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "aead"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

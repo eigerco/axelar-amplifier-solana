@@ -28,9 +28,8 @@ use crate::processor::token_manager as token_manager_processor;
 use crate::state::flow_limit::FlowDirection;
 use crate::state::token_manager::{self, TokenManager};
 use crate::{
-    assert_valid_interchain_transfer_execute_pda,
-    assert_valid_token_manager_pda, event, initiate_interchain_execute_pda_if_empty, seed_prefixes,
-    FromAccountInfoSlice, Validate,
+    assert_valid_interchain_transfer_execute_pda, assert_valid_token_manager_pda, event,
+    initiate_interchain_execute_pda_if_empty, seed_prefixes, FromAccountInfoSlice, Validate,
 };
 
 use super::gmp::{self, GmpAccounts};

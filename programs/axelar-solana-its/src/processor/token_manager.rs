@@ -476,6 +476,7 @@ pub(crate) fn process_add_flow_limiter<'a>(accounts: &'a [AccountInfo<'a>]) -> P
     let destination_user_account = next_account_info(accounts_iter)?;
     let destination_roles_account = next_account_info(accounts_iter)?;
 
+    validate_system_account_key(system_account.key)?;
     let its_config = InterchainTokenService::load(its_config_account)?;
     assert_valid_its_root_pda(its_config_account, its_config.bump)?;
     if resource.key == its_config_account.key {
@@ -515,6 +516,7 @@ pub(crate) fn process_remove_flow_limiter<'a>(accounts: &'a [AccountInfo<'a>]) -
     let origin_user_account = next_account_info(accounts_iter)?;
     let origin_roles_account = next_account_info(accounts_iter)?;
 
+    validate_system_account_key(system_account.key)?;
     let its_config = InterchainTokenService::load(its_config_account)?;
     assert_valid_its_root_pda(its_config_account, its_config.bump)?;
     if resource.key == its_config_account.key {
@@ -567,6 +569,8 @@ pub(crate) fn process_transfer_operatorship<'a>(accounts: &'a [AccountInfo<'a>])
     let token_manager_account = next_account_info(accounts_iter)?;
     let destination_user_account = next_account_info(accounts_iter)?;
     let destination_roles_account = next_account_info(accounts_iter)?;
+
+    validate_system_account_key(system_account.key)?;
 
     if payer.key == destination_user_account.key {
         msg!("Source and destination accounts are the same");
@@ -629,6 +633,8 @@ pub(crate) fn process_propose_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) 
     let destination_roles_account = next_account_info(accounts_iter)?;
     let proposal_account = next_account_info(accounts_iter)?;
 
+    validate_system_account_key(system_account.key)?;
+
     let role_management_accounts = RoleTransferWithProposalAccounts {
         system_account,
         payer,
@@ -666,6 +672,8 @@ pub(crate) fn process_accept_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -
     let origin_user_account = next_account_info(accounts_iter)?;
     let origin_roles_account = next_account_info(accounts_iter)?;
     let proposal_account = next_account_info(accounts_iter)?;
+
+    validate_system_account_key(system_account.key)?;
 
     if payer.key == origin_user_account.key {
         msg!("Source and destination accounts are the same");

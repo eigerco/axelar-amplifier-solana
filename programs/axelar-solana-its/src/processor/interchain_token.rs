@@ -809,6 +809,8 @@ pub(crate) fn process_transfer_mintership<'a>(accounts: &'a [AccountInfo<'a>]) -
     let destination_user_account = next_account_info(accounts_iter)?;
     let destination_roles_account = next_account_info(accounts_iter)?;
 
+    validate_system_account_key(system_account.key)?;
+
     if payer.key == destination_user_account.key {
         msg!("Source and destination accounts are the same");
         return Err(ProgramError::InvalidArgument);
@@ -871,6 +873,8 @@ pub(crate) fn process_propose_mintership<'a>(accounts: &'a [AccountInfo<'a>]) ->
     let destination_roles_account = next_account_info(accounts_iter)?;
     let proposal_account = next_account_info(accounts_iter)?;
 
+    validate_system_account_key(system_account.key)?;
+
     let its_config = InterchainTokenService::load(its_config_account)?;
     let token_manager = TokenManager::load(token_manager_account)?;
 
@@ -913,6 +917,7 @@ pub(crate) fn process_accept_mintership<'a>(accounts: &'a [AccountInfo<'a>]) -> 
     let its_config = InterchainTokenService::load(its_config_account)?;
     let token_manager = TokenManager::load(token_manager_account)?;
 
+    validate_system_account_key(system_account.key)?;
     assert_valid_its_root_pda(its_config_account, its_config.bump)?;
     assert_valid_token_manager_pda(
         token_manager_account,

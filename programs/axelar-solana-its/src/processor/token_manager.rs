@@ -41,6 +41,12 @@ pub(crate) fn set_flow_limit(
     )?;
 
     let mut token_manager = TokenManager::load(accounts.token_manager_pda)?;
+    assert_valid_token_manager_pda(
+        accounts.token_manager_pda,
+        accounts.its_root_pda.key,
+        &token_manager.token_id,
+        token_manager.bump,
+    )?;
     token_manager.flow_slot.flow_limit = flow_limit;
     token_manager.store(
         accounts.flow_limiter,
@@ -470,6 +476,7 @@ impl Validate for SetFlowLimitAccounts<'_> {
 
         let its_config_account = InterchainTokenService::load(self.its_root_pda)?;
         assert_valid_its_root_pda(self.its_root_pda, its_config_account.bump)?;
+
         Ok(())
     }
 }
@@ -494,8 +501,13 @@ pub(crate) fn process_add_flow_limiter<'a>(accounts: &'a [AccountInfo<'a>]) -> P
         return Err(ProgramError::InvalidAccountData);
     }
 
-    // Ensure resource is a `TokenManager`
-    TokenManager::load(resource)?;
+    let token_manager = TokenManager::load(resource)?;
+    assert_valid_token_manager_pda(
+        resource,
+        its_config_account.key,
+        &token_manager.token_id,
+        token_manager.bump,
+    )?;
 
     let role_management_accounts = RoleAddAccounts {
         system_account,
@@ -534,8 +546,13 @@ pub(crate) fn process_remove_flow_limiter<'a>(accounts: &'a [AccountInfo<'a>]) -
         return Err(ProgramError::InvalidAccountData);
     }
 
-    // Ensure resource is a `TokenManager`
-    TokenManager::load(resource)?;
+    let token_manager = TokenManager::load(resource)?;
+    assert_valid_token_manager_pda(
+        resource,
+        its_config_account.key,
+        &token_manager.token_id,
+        token_manager.bump,
+    )?;
 
     let role_management_accounts = RoleRemoveAccounts {
         system_account,

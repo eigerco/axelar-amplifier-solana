@@ -65,10 +65,10 @@ impl FromStr for Hash {
         let bytes = bs58::decode(s)
             .into_vec()
             .map_err(|_| ParseHashError::Invalid)?;
-        if bytes.len() != mem::size_of::<Hash>() {
-            Err(ParseHashError::WrongSize)
-        } else {
+        if bytes.len() == mem::size_of::<Hash>() {
             Ok(Hash::new(&bytes))
+        } else {
+            Err(ParseHashError::WrongSize)
         }
     }
 }

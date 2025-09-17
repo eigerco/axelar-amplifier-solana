@@ -48,6 +48,7 @@ pub mod axelar_solana_gateway {
     pub fn initialize_payload_verification_session(
         ctx: Context<InitializePayloadVerificationSession>,
         payload_merkle_root: [u8; 32],
+        signing_verifier_set_hash: [u8; 32],
     ) -> Result<()> {
         Ok(())
     }

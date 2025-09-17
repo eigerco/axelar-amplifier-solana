@@ -507,8 +507,12 @@ async fn test_verify_all_signatures_when_session_pda_has_lamports() {
         .await;
     let execute_data = metadata.construct_execute_data(&metadata.signers.clone(), payload);
 
-    let (verification_session_pda, _) =
-        axelar_solana_gateway::get_signature_verification_pda(&execute_data.payload_merkle_root);
+    let payload_hash = construct_payload_hash::<NativeHasher>(
+        execute_data.payload_merkle_root,
+        execute_data.signing_verifier_set_merkle_root,
+    );
+    let (verification_session_pda, verification_pda_bump) =
+        axelar_solana_gateway::get_signature_verification_pda(&payload_hash);
     let payer = metadata.fixture.payer.pubkey();
 
     // Transfer lamports to the PDA to try to prevent its initialization
@@ -547,14 +551,11 @@ async fn test_verify_all_signatures_when_session_pda_has_lamports() {
     }
 
     // Check that the PDA contains the expected data
-    let (verification_pda, bump) =
-        axelar_solana_gateway::get_signature_verification_pda(&execute_data.payload_merkle_root);
-
     let session = metadata
-        .signature_verification_session(verification_pda)
+        .signature_verification_session(verification_session_pda)
         .await;
 
-    assert_eq!(session.bump, bump);
+    assert_eq!(session.bump, verification_pda_bump);
     let mut slots = session.signature_verification.slots_iter();
     assert!(
         slots.by_ref().take(amount_of_signers).all(|slot| slot),

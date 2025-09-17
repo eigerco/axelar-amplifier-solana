@@ -297,8 +297,12 @@ fn process_initialize(
         &[crate::seed_prefixes::ITS_SEED, &[its_root_pda_bump]],
     )?;
 
-    let (_user_roles_pda, user_roles_pda_bump) =
+    let (user_roles_pda, user_roles_pda_bump) =
         role_management::find_user_roles_pda(&crate::id(), &its_root_pda, operator.key);
+    if user_roles_pda != *user_roles_account.key {
+        return Err(ProgramError::InvalidAccountData);
+    }
+
     let operator_user_roles = UserRoles::new(Roles::OPERATOR, user_roles_pda_bump);
     let signer_seeds = &[
         role_management::seed_prefixes::USER_ROLES_SEED,

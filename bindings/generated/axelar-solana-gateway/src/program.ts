@@ -1,5 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
-import { Program, AnchorProvider } from "@project-serum/anchor";
+import { Program, AnchorProvider } from "@coral-xyz/anchor";
 
 import { AxelarSolanaGatewayCoder } from "./coder";
 
@@ -245,6 +245,12 @@ type AxelarSolanaGateway = {
       args: [
         {
           name: "payloadMerkleRoot";
+          type: {
+            array: ["u8", 32];
+          };
+        },
+        {
+          name: "signingVerifierSetHash";
           type: {
             array: ["u8", 32];
           };
@@ -1083,6 +1089,12 @@ const IDL: AxelarSolanaGateway = {
       args: [
         {
           name: "payloadMerkleRoot",
+          type: {
+            array: ["u8", 32],
+          },
+        },
+        {
+          name: "signingVerifierSetHash",
           type: {
             array: ["u8", 32],
           },

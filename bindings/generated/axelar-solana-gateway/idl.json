@@ -238,6 +238,15 @@
               32
             ]
           }
+        },
+        {
+          "name": "signingVerifierSetHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         }
       ]
     },

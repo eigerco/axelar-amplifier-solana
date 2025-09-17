@@ -86,14 +86,15 @@ impl Processor {
             GatewayConfig::read(&data).ok_or(GatewayError::BytemuckDataLenInvalid)?;
         assert_valid_gateway_root_pda(gateway_config.bump, gateway_root_pda.key)?;
 
-        // Construct the payload hash for PDA derivation
-        let payload_hash = construct_payload_hash::<SolanaSyscallHasher>(
+        // Construct the combined payload hash for PDA derivation
+        let combined_payload_hash = construct_payload_hash::<SolanaSyscallHasher>(
             payload_merkle_root,
             signing_verifier_set_hash,
         );
 
         // Check: Verification PDA can be derived from provided seeds.
-        let (verification_session_pda, bump) = crate::get_signature_verification_pda(&payload_hash);
+        let (verification_session_pda, bump) =
+            crate::get_signature_verification_pda(&combined_payload_hash);
         if verification_session_pda != *verification_session_account.key {
             return Err(GatewayError::InvalidVerificationSessionPDA.into());
         }
@@ -107,7 +108,7 @@ impl Processor {
         // bump seed.
         let signers_seeds = &[
             seed_prefixes::SIGNATURE_VERIFICATION_SEED,
-            &payload_hash,
+            &combined_payload_hash,
             &[bump],
         ];
 

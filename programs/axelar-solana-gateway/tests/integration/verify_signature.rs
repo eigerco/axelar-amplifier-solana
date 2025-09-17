@@ -65,12 +65,12 @@ async fn test_verify_one_signature(
         .unwrap();
 
     // Check that the PDA contains the expected data
-    let payload_hash = construct_payload_hash::<NativeHasher>(
+    let combined_payload_hash = construct_payload_hash::<NativeHasher>(
         execute_data.payload_merkle_root,
         execute_data.signing_verifier_set_merkle_root,
     );
     let (verification_pda, bump) =
-        axelar_solana_gateway::get_signature_verification_pda(&payload_hash);
+        axelar_solana_gateway::get_signature_verification_pda(&combined_payload_hash);
 
     let session = metadata
         .signature_verification_session(verification_pda)
@@ -130,12 +130,12 @@ async fn test_verify_all_signatures() {
     }
 
     // Check that the PDA contains the expected data
-    let payload_hash = construct_payload_hash::<NativeHasher>(
+    let combined_payload_hash = construct_payload_hash::<NativeHasher>(
         execute_data.payload_merkle_root,
         execute_data.signing_verifier_set_merkle_root,
     );
     let (verification_pda, bump) =
-        axelar_solana_gateway::get_signature_verification_pda(&payload_hash);
+        axelar_solana_gateway::get_signature_verification_pda(&combined_payload_hash);
 
     let session = metadata
         .signature_verification_session(verification_pda)
@@ -324,12 +324,12 @@ async fn test_large_weight_will_validate_whole_batch() {
         .unwrap();
 
     // Check that the PDA contains the expected data
-    let payload_hash = construct_payload_hash::<NativeHasher>(
+    let combined_payload_hash = construct_payload_hash::<NativeHasher>(
         execute_data.payload_merkle_root,
         execute_data.signing_verifier_set_merkle_root,
     );
     let (verification_pda, bump) =
-        axelar_solana_gateway::get_signature_verification_pda(&payload_hash);
+        axelar_solana_gateway::get_signature_verification_pda(&combined_payload_hash);
 
     let session = metadata
         .signature_verification_session(verification_pda)
@@ -507,12 +507,12 @@ async fn test_verify_all_signatures_when_session_pda_has_lamports() {
         .await;
     let execute_data = metadata.construct_execute_data(&metadata.signers.clone(), payload);
 
-    let payload_hash = construct_payload_hash::<NativeHasher>(
+    let combined_payload_hash = construct_payload_hash::<NativeHasher>(
         execute_data.payload_merkle_root,
         execute_data.signing_verifier_set_merkle_root,
     );
     let (verification_session_pda, verification_pda_bump) =
-        axelar_solana_gateway::get_signature_verification_pda(&payload_hash);
+        axelar_solana_gateway::get_signature_verification_pda(&combined_payload_hash);
     let payer = metadata.fixture.payer.pubkey();
 
     // Transfer lamports to the PDA to try to prevent its initialization

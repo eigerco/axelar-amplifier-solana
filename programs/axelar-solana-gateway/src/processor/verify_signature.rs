@@ -57,13 +57,13 @@ impl Processor {
             .ok_or(GatewayError::BytemuckDataLenInvalid)?;
 
         // Construct the payload hash using the stored signing verifier set hash
-        let payload_hash = construct_payload_hash::<SolanaSyscallHasher>(
+        let combined_payload_hash = construct_payload_hash::<SolanaSyscallHasher>(
             payload_merkle_root,
             session.signature_verification.signing_verifier_set_hash,
         );
 
         assert_valid_signature_verification_pda(
-            &payload_hash,
+            &combined_payload_hash,
             session.bump,
             verification_session_account.key,
         )?;

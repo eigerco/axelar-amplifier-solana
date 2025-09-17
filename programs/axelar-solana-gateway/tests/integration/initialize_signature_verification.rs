@@ -38,10 +38,10 @@ async fn test_initialize_payload_verification_session() {
     let _tx_result = metadata.send_tx(&[ix]).await.unwrap();
 
     // Check PDA contains the expected data
-    let payload_hash =
+    let combined_payload_hash =
         construct_payload_hash::<NativeHasher>(payload_merkle_root, signing_verifier_set_hash);
     let (verification_pda, bump) =
-        axelar_solana_gateway::get_signature_verification_pda(&payload_hash);
+        axelar_solana_gateway::get_signature_verification_pda(&combined_payload_hash);
 
     let verification_session_account = metadata
         .try_get_account_no_checks(&verification_pda)

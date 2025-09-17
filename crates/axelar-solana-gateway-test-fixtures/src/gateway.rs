@@ -172,11 +172,11 @@ impl SolanaAxelarIntegrationMetadata {
 
         // Check that the PDA contains the expected data
         // Use the same derivation as the initialization to get the correct PDA
-        let payload_hash = construct_payload_hash::<NativeHasher>(
+        let combined_payload_hash = construct_payload_hash::<NativeHasher>(
             execute_data.payload_merkle_root,
             execute_data.signing_verifier_set_merkle_root,
         );
-        let (verification_pda, _bump) = get_signature_verification_pda(&payload_hash);
+        let (verification_pda, _bump) = get_signature_verification_pda(&combined_payload_hash);
         Ok(verification_pda)
     }
 

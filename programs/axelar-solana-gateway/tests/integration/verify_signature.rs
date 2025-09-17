@@ -529,10 +529,11 @@ async fn test_verify_all_signatures_when_session_pda_has_lamports() {
 
     for verifier_set_leaf in execute_data.signing_verifier_set_leaves {
         // Verify the signature
-        let ix = axelar_solana_gateway::instructions::verify_signature(
+        let ix = verify_signature(
             metadata.gateway_root_pda,
             verifier_set_tracker_pda,
             execute_data.payload_merkle_root,
+            execute_data.signing_verifier_set_merkle_root,
             verifier_set_leaf,
         )
         .unwrap();

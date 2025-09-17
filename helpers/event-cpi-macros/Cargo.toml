@@ -1,0 +1,27 @@
+[package]
+name = "event-cpi-macro"
+version = "0.1.0"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+borsh.workspace = true
+bytemuck.workspace = true
+solana-program.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+event-cpi.workspace = true
+bs58 = "0.5"
+sha2 = "0.10.9"
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+solana-sdk.workspace = true
+solana-program-test.workspace = true

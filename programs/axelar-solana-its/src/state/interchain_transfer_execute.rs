@@ -1,7 +1,6 @@
 //! State module contains data structures that keep state within the ITS
 //! program.
 
-
 use borsh::{BorshDeserialize, BorshSerialize};
 use program_utils::pda::BorshPda;
 

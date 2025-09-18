@@ -1,5 +1,6 @@
 //! State related structs and operations for the governance contract.
 
+use crate::discriminators::GOVERNANCE_CONFIG_PDA_DISCRIMINATOR;
 use crate::seed_prefixes;
 use borsh::{BorshDeserialize, BorshSerialize};
 use core::any::type_name;
@@ -26,6 +27,8 @@ pub const VALID_PROPOSAL_DELAY_RANGE: RangeInclusive<u32> = 3600..=86400;
 /// Governance configuration type.
 #[derive(Debug, Eq, PartialEq, Clone, BorshSerialize, BorshDeserialize)]
 pub struct GovernanceConfig {
+    /// Anchor compatible discriminator
+    pub discriminator: [u8; 8],
     /// The bump for this account.
     pub bump: u8,
     /// The name hash of the governance chain of the remote GMP contract. This
@@ -55,6 +58,7 @@ impl GovernanceConfig {
         operator: Address,
     ) -> Self {
         Self {
+            discriminator: GOVERNANCE_CONFIG_PDA_DISCRIMINATOR,
             bump: 0, // This will be set by the program
             chain_hash,
             address_hash,
@@ -96,7 +100,8 @@ pub struct GovernanceConfigUpdate {
 impl Sealed for GovernanceConfig {}
 
 impl Pack for GovernanceConfig {
-    const LEN: usize = size_of::<u8>()
+    const LEN: usize = size_of::<[u8; 8]>()
+        + size_of::<u8>()
         + size_of::<Hash>()
         + size_of::<Hash>()
         + size_of::<u32>()

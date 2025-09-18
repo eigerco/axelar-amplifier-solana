@@ -11,11 +11,14 @@ use solana_program::msg;
 use solana_program::program_error::ProgramError;
 use solana_program::sysvar::Sysvar;
 
+use crate::discriminators::FLOW_STATE_PDA_DISCRIMINATOR;
+
 const EPOCH_TIME: Duration = Duration::from_secs(6 * 60 * 60);
 
 #[derive(Debug, Eq, PartialEq, Clone, BorshSerialize, BorshDeserialize)]
 /// Struct containing flow information for a specific epoch.
 pub struct FlowState {
+    pub discriminator: [u8; 8],
     pub flow_limit: u64,
     pub flow_in: u64,
     pub flow_out: u64,
@@ -26,6 +29,7 @@ pub struct FlowState {
 impl FlowState {
     pub(crate) const fn new(flow_limit: u64, epoch: u64) -> Self {
         Self {
+            discriminator: FLOW_STATE_PDA_DISCRIMINATOR,
             flow_in: 0,
             flow_out: 0,
             epoch,

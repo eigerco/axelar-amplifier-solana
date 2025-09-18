@@ -1,4 +1,5 @@
 //! Axelar Gateway program for the Solana blockchain
+pub mod discriminators;
 pub mod entrypoint;
 pub mod error;
 pub mod executable;

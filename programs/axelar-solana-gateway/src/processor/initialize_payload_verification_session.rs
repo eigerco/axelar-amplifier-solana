@@ -7,6 +7,7 @@ use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 
 use super::Processor;
+use crate::discriminators::VERIFICATION_SESSION_ACCOUNT_PDA_DISCRIMINATOR;
 use crate::error::GatewayError;
 use crate::state::signature_verification_pda::SignatureVerificationSessionData;
 use crate::state::GatewayConfig;
@@ -119,6 +120,7 @@ impl Processor {
         let session = SignatureVerificationSessionData::read_mut(&mut data)
             .ok_or(GatewayError::BytemuckDataLenInvalid)?;
         session.bump = bump;
+        session.discriminator = VERIFICATION_SESSION_ACCOUNT_PDA_DISCRIMINATOR;
 
         Ok(())
     }

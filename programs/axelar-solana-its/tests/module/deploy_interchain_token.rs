@@ -1,6 +1,8 @@
 use anyhow::anyhow;
+use axelar_solana_its::discriminators::APPROVE_DEPLOY_REMOTE_INTERCHAIN_TOKEN;
 use axelar_solana_its::instruction::InterchainTokenServiceInstruction;
 use borsh::to_vec;
+use discriminator_utils::prepend_discriminator;
 use event_utils::Event as _;
 use solana_program::instruction::{AccountMeta, Instruction};
 use solana_program::system_program;
@@ -515,7 +517,7 @@ async fn test_prevent_deploy_approval_created_by_anyone(
         AccountMeta::new_readonly(system_program::ID, false),
     ];
 
-    let data = to_vec(
+    let instruction_data = to_vec(
         &InterchainTokenServiceInstruction::ApproveDeployRemoteInterchainToken {
             deployer: ctx.solana_chain.fixture.payer.pubkey(),
             salt: token_b_salt,
@@ -523,6 +525,8 @@ async fn test_prevent_deploy_approval_created_by_anyone(
             destination_minter,
         },
     )?;
+
+    let data = prepend_discriminator(APPROVE_DEPLOY_REMOTE_INTERCHAIN_TOKEN, &instruction_data);
 
     let approve_deploy_b_ix = Instruction {
         program_id: axelar_solana_its::ID,

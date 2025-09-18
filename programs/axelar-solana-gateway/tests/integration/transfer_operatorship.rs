@@ -11,7 +11,6 @@ use axelar_solana_gateway_test_fixtures::{
 use discriminator_utils::prepend_discriminator;
 use num_traits::ToPrimitive as _;
 use program_utils::pda::BytemuckedPda;
-use solana_program::hash;
 use solana_program_test::tokio::fs;
 use solana_program_test::{tokio, ProgramTest};
 use solana_sdk::account::ReadableAccount;

@@ -19,7 +19,7 @@ const EPOCH_TIME: Duration = Duration::from_secs(6 * 60 * 60);
 /// Struct containing flow information for a specific epoch.
 pub struct FlowState {
     pub discriminator: [u8; 8],
-    pub flow_limit: u64,
+    pub flow_limit: Option<u64>,
     pub flow_in: u64,
     pub flow_out: u64,
     pub epoch: u64,

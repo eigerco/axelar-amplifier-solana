@@ -54,7 +54,7 @@ impl Processor {
     ) -> ProgramResult {
         check_program_account(*program_id)?;
 
-        let governance_instruction = borsh::from_slice(instruction_data).map_err(|err| {
+        let governance_instruction = borsh::from_slice(&instruction_data[8..]).map_err(|err| {
             msg!("Could not decode program input data: {}", err);
             ProgramError::InvalidArgument
         })?;

@@ -41,13 +41,14 @@ pub fn process_instruction<'a>(
     instruction_data: &[u8],
 ) -> ProgramResult {
     check_program_account(*program_id)?;
-    let instruction = match InterchainTokenServiceInstruction::try_from_slice(instruction_data) {
-        Ok(instruction) => instruction,
-        Err(err) => {
-            msg!("Failed to deserialize instruction: {:?}", err);
-            return Err(ProgramError::InvalidInstructionData);
-        }
-    };
+    let instruction =
+        match InterchainTokenServiceInstruction::try_from_slice(&instruction_data[8..]) {
+            Ok(instruction) => instruction,
+            Err(err) => {
+                msg!("Failed to deserialize instruction: {:?}", err);
+                return Err(ProgramError::InvalidInstructionData);
+            }
+        };
 
     match instruction {
         InterchainTokenServiceInstruction::Initialize {

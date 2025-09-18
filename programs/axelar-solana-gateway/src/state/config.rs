@@ -1,11 +1,10 @@
 //! Module for the `GatewayConfig` account type.
 
+use crate::{discriminators::CONFIG_PDA_DISCRIMINATOR, error::GatewayError};
 use axelar_message_primitives::U256;
 use bytemuck::{Pod, Zeroable};
 use program_utils::pda::BytemuckedPda;
 use solana_program::pubkey::Pubkey;
-
-use crate::error::GatewayError;
 
 /// Timestamp alias for when the last signer rotation happened
 pub type Timestamp = u64;
@@ -19,6 +18,8 @@ pub type VerifierSetEpoch = U256;
 #[allow(clippy::partial_pub_fields)]
 #[derive(Pod, Zeroable, Debug, PartialEq, Eq, Clone, Copy)]
 pub struct GatewayConfig {
+    /// Anchor compatible discriminator
+    pub discriminator: [u8; 8],
     /// current epoch points to the latest signer set hash
     pub current_epoch: VerifierSetEpoch,
     /// how many n epochs do we consider valid
@@ -52,6 +53,7 @@ impl GatewayConfig {
         bump: u8,
     ) -> Self {
         Self {
+            discriminator: CONFIG_PDA_DISCRIMINATOR,
             current_epoch,
             previous_verifier_set_retention,
             minimum_rotation_delay,

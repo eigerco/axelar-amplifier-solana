@@ -4,6 +4,8 @@ use axelar_message_primitives::U256;
 use bytemuck::{Pod, Zeroable};
 use program_utils::pda::BytemuckedPda;
 
+use crate::discriminators::VERIFIER_SET_TRACKER_PDA_DISCRIMINATOR;
+
 /// Ever-incrementing counter for keeping track of the sequence of signer sets
 pub type Epoch = U256;
 /// Verifier set hash
@@ -16,6 +18,8 @@ pub type VerifierSetHash = [u8; 32];
 #[allow(clippy::partial_pub_fields)]
 #[derive(Zeroable, Pod, Clone, Copy, PartialEq, Eq)]
 pub struct VerifierSetTracker {
+    /// Anchor compatible discriminator
+    pub discriminator: [u8; 8],
     /// The canonical bump for this account.
     pub bump: u8,
     /// Padding for the bump
@@ -31,6 +35,7 @@ impl VerifierSetTracker {
     #[must_use]
     pub const fn new(bump: u8, epoch: Epoch, verifier_set_hash: VerifierSetHash) -> Self {
         Self {
+            discriminator: VERIFIER_SET_TRACKER_PDA_DISCRIMINATOR,
             bump,
             _padding: [0; 7],
             epoch,

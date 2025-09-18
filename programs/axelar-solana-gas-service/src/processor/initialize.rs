@@ -7,6 +7,7 @@ use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 
+use crate::discriminators::CONFIG_PDA_DISCRIMINATOR;
 use crate::state::Config;
 use crate::{assert_valid_config_pda, get_config_pda, seed_prefixes};
 
@@ -48,6 +49,7 @@ pub(crate) fn process_initialize_config(
     let gateway_config = Config::read_mut(&mut data).ok_or(ProgramError::InvalidAccountData)?;
 
     *gateway_config = Config {
+        discriminator: CONFIG_PDA_DISCRIMINATOR,
         bump,
         operator: *operator.key,
     };

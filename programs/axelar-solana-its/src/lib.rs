@@ -13,6 +13,7 @@ use solana_program::pubkey::Pubkey;
 use state::interchain_transfer_execute::InterchainTransferExecute;
 use state::InterchainTokenService;
 
+pub mod discriminators;
 mod entrypoint;
 pub mod event;
 pub mod executable;

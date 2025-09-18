@@ -1,10 +1,10 @@
 //! State module contains data structures that keep state within the ITS
 //! program.
 
-use std::collections::HashSet;
-
+use crate::discriminators::INTERCHAIN_TOKEN_SERVICE_PDA_DISCRIMINATOR;
 use borsh::{BorshDeserialize, BorshSerialize};
 use program_utils::pda::BorshPda;
+use std::collections::HashSet;
 
 pub mod deploy_approval;
 pub mod flow_limit;
@@ -14,6 +14,8 @@ pub mod token_manager;
 /// Struct containing state of the ITS program.
 #[derive(Debug, Eq, PartialEq, Clone, BorshSerialize, BorshDeserialize)]
 pub struct InterchainTokenService {
+    /// Anchor compatible discriminator
+    pub discriminator: [u8; 8],
     /// The address of the Axelar ITS Hub contract.
     pub its_hub_address: String,
     /// Name of the chain ITS is running on.
@@ -34,6 +36,7 @@ impl InterchainTokenService {
     #[must_use]
     pub fn new(bump: u8, chain_name: String, its_hub_address: String) -> Self {
         Self {
+            discriminator: INTERCHAIN_TOKEN_SERVICE_PDA_DISCRIMINATOR,
             its_hub_address,
             chain_name,
             paused: false,

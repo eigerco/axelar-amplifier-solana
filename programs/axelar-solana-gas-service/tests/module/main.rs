@@ -10,6 +10,7 @@
     unused_must_use
 )]
 
+mod discriminators;
 mod initialize;
 mod transfer_operatorship;
 

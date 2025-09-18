@@ -32,6 +32,7 @@ use spl_token_metadata_interface::state::TokenMetadata;
 
 use super::gmp::{self, GmpAccounts};
 use super::token_manager::{DeployTokenManagerAccounts, DeployTokenManagerInternal};
+use crate::discriminators::DEPLOY_APPROVAL_PDA_DISCRIMINATOR;
 use crate::state::deploy_approval::DeployApproval;
 use crate::state::token_manager::{self, TokenManager};
 use crate::state::InterchainTokenService;
@@ -709,6 +710,7 @@ pub(crate) fn approve_deploy_remote_interchain_token(
     }
 
     let approval = DeployApproval {
+        discriminator: DEPLOY_APPROVAL_PDA_DISCRIMINATOR,
         approved_destination_minter: solana_program::keccak::hash(&destination_minter).to_bytes(),
         bump,
     };

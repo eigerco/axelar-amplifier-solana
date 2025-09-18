@@ -5,6 +5,7 @@ use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 
+pub mod discriminators;
 pub mod entrypoint;
 pub mod events;
 pub mod instructions;

@@ -1,3 +1,4 @@
+use axelar_solana_gateway::discriminators::TRANSFER_OPERATORSHIP;
 use axelar_solana_gateway::error::GatewayError;
 use axelar_solana_gateway::instructions::GatewayInstruction;
 use axelar_solana_gateway::processor::{GatewayEvent, OperatorshipTransferredEvent};
@@ -7,8 +8,10 @@ use axelar_solana_gateway_test_fixtures::gateway::{get_gateway_events, ProgramIn
 use axelar_solana_gateway_test_fixtures::{
     SolanaAxelarIntegration, SolanaAxelarIntegrationMetadata,
 };
+use discriminator_utils::prepend_discriminator;
 use num_traits::ToPrimitive as _;
 use program_utils::pda::BytemuckedPda;
+use solana_program::hash;
 use solana_program_test::tokio::fs;
 use solana_program_test::{tokio, ProgramTest};
 use solana_sdk::account::ReadableAccount;
@@ -263,13 +266,16 @@ async fn fail_if_invalid_program_id() {
         AccountMeta::new_readonly(new_operator, false),
     ];
 
-    let data = borsh::to_vec(&GatewayInstruction::TransferOperatorship).unwrap();
+    let instruction_data = borsh::to_vec(&GatewayInstruction::TransferOperatorship).unwrap();
+
+    let data = prepend_discriminator(TRANSFER_OPERATORSHIP, &instruction_data);
 
     let ix = Instruction {
         program_id: axelar_solana_gateway::id(),
         accounts,
         data,
     };
+
     let tx = fixture
         .send_tx_with_custom_signers(
             &[ix],
@@ -325,7 +331,9 @@ async fn fail_if_stranger_dose_not_sing_anything() {
         AccountMeta::new_readonly(new_operator, false),
     ];
 
-    let data = borsh::to_vec(&GatewayInstruction::TransferOperatorship).unwrap();
+    let instruction_data = borsh::to_vec(&GatewayInstruction::TransferOperatorship).unwrap();
+
+    let data = prepend_discriminator(TRANSFER_OPERATORSHIP, &instruction_data);
 
     let ix = Instruction {
         program_id: axelar_solana_gateway::id(),

@@ -3,11 +3,15 @@
 use bytemuck::{Pod, Zeroable};
 use program_utils::pda::BytemuckedPda;
 
+use crate::discriminators::INCOMING_MESSAGE_PDA_DISCRIMINATOR;
+
 /// Data for the incoming message (from Axelar to Solana) PDA.
 #[repr(C)]
 #[allow(clippy::partial_pub_fields)]
 #[derive(Zeroable, Pod, Clone, Copy, PartialEq, Eq, Debug)]
 pub struct IncomingMessage {
+    /// Anchor compatible discriminator
+    pub discriminator: [u8; 8],
     /// The bump that was used to create the PDA
     pub bump: u8,
     /// The bump for the signing PDA
@@ -33,6 +37,7 @@ impl IncomingMessage {
         payload_hash: [u8; 32],
     ) -> Self {
         Self {
+            discriminator: INCOMING_MESSAGE_PDA_DISCRIMINATOR,
             bump,
             signing_pda_bump,
             _pad: Default::default(),

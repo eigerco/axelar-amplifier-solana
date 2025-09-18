@@ -24,7 +24,6 @@ use solana_program::program::{invoke, invoke_signed, set_return_data};
 use solana_program::program_error::ProgramError;
 use solana_program::program_pack::Pack as _;
 use solana_program::pubkey::Pubkey;
-use spl_token_2022::check_spl_token_program_account;
 use spl_token_2022::extension::metadata_pointer::MetadataPointer;
 use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use spl_token_2022::instruction::initialize_mint;
@@ -65,7 +64,6 @@ pub(crate) struct DeployInterchainTokenAccounts<'a> {
 impl Validate for DeployInterchainTokenAccounts<'_> {
     fn validate(&self) -> Result<(), ProgramError> {
         validate_system_account_key(self.system_account.key)?;
-        check_spl_token_program_account(self.token_program.key)?;
         validate_spl_associated_token_account_key(self.ata_program.key)?;
         validate_rent_key(self.rent_sysvar.key)?;
         validate_sysvar_instructions_key(self.sysvar_instructions.key)?;

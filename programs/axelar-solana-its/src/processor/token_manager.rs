@@ -285,6 +285,7 @@ pub(crate) fn handover_mint_authority(
     msg!("Instruction: HandoverMintAuthority");
 
     validate_system_account_key(system_account.key)?;
+    spl_token_2022::check_spl_token_program_account(token_program.key)?;
 
     if !payer.is_signer {
         return Err(ProgramError::MissingRequiredSignature);

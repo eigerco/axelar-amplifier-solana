@@ -8,6 +8,26 @@ fn gen_discriminator(namespace: &str, name: impl ToString) -> proc_macro2::Token
     format!("&{discriminator:?}").parse().unwrap()
 }
 
+/// Attribute macro that transforms a struct into an event that can be emitted via CPI.
+///
+/// This macro automatically:
+/// - Adds `BorshSerialize` and `BorshDeserialize` derives
+/// - Implements `event_cpi::CpiEvent` trait with proper data serialization
+/// - Implements `event_cpi::Discriminator` trait with a computed 8-byte discriminator
+///
+/// # External Dependencies
+/// - Requires `event_cpi` crate to be available
+/// - Requires `borsh` crate for serialization
+///
+/// # Example
+/// ```rust
+/// #[event]
+/// #[derive(Debug, Clone)]
+/// pub struct MyEvent {
+///     pub user: Pubkey,
+///     pub amount: u64,
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn event(
     _args: proc_macro::TokenStream,
@@ -42,6 +62,35 @@ pub fn event(
     proc_macro::TokenStream::from(ret)
 }
 
+/// Function-like macro that extracts and validates event CPI accounts from an account iterator.
+///
+/// This macro consumes the next two accounts from the provided iterator and validates them:
+/// 1. Event authority account (must match the derived PDA)
+/// 2. Program account (must match the current program ID)
+///
+/// # Arguments
+/// - `accounts_iterator_name` (optional): Name of the accounts iterator variable
+///   - Default: `accounts` if not provided
+///   - Type: `&mut Iterator<Item = &AccountInfo>`
+///
+/// # External Dependencies
+/// - Requires `crate::ID` to be defined (current program's ID)
+/// - Requires `event_cpi` crate
+/// - Requires `solana_program` crate
+///
+/// # Variables Created in Scope
+/// - `__event_cpi_authority_info: &AccountInfo` - The event authority account
+/// - `__event_cpi_program_account: &AccountInfo` - The program account
+/// - `__event_cpi_derived_authority_info: Pubkey` - The expected authority PDA
+/// - `__event_cpi_authority_bump: u8` - The bump seed for the authority PDA
+///
+/// # Example
+/// ```rust
+/// let accounts = &mut accounts.iter();
+/// event_cpi_accounts!(accounts);
+/// // or with default iterator name:
+/// event_cpi_accounts!();
+/// ```
 #[proc_macro]
 pub fn event_cpi_accounts(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // Parse the input to get the accounts list name (optional)
@@ -72,6 +121,33 @@ pub fn event_cpi_accounts(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     })
 }
 
+/// Function-like macro that emits an event via Cross-Program Invocation (CPI).
+///
+/// This macro creates a CPI instruction to emit the provided event. The event data is serialized
+/// with the event discriminator prefix and sent as a self-invoke to the current program.
+///
+/// # Arguments
+/// - `event_expression` (required): An expression that evaluates to a struct implementing `CpiEvent`
+///   - Type: Any type implementing `event_cpi::CpiEvent`
+///
+/// # External Dependencies
+/// - Requires `crate::ID` to be defined (current program's ID)
+/// - Requires `event_cpi`
+/// - Requires `solana_program` crate
+///
+/// # Variables Required in Scope
+/// These variables must be available in the current scope (typically created by `event_cpi_accounts!`):
+/// - `__event_cpi_authority_info: &AccountInfo` - The event authority account
+/// - `__event_cpi_authority_bump: u8` - The bump seed for authority PDA
+///
+/// # Example
+/// ```rust
+/// let event = MyEvent {
+///     user: *user_account.key,
+///     amount: 1000,
+/// };
+/// emit_cpi!(event);
+/// ```
 #[proc_macro]
 pub fn emit_cpi(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let event_struct = parse_macro_input!(input as syn::Expr);
@@ -111,6 +187,44 @@ pub fn emit_cpi(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     })
 }
 
+/// Function-like macro that handles incoming event CPI instructions in your program's processor.
+///
+/// This macro should be placed at the beginning of your instruction processor to intercept
+/// and handle event CPI calls. When an instruction starts with the event tag, it validates
+/// the event authority and returns early, preventing further instruction processing.
+///
+/// # Arguments
+/// - `instruction_data_name` (optional): Name of the instruction data variable
+///   - Default: `instruction_data` if not provided
+///   - Type: `&[u8]` - The raw instruction data bytes
+///
+/// # External Dependencies
+/// - Requires `event_cpi` crate
+/// - Requires `solana_program` crate
+///
+/// # Variables Required in Scope
+/// - `program_id: &Pubkey` - The current program's ID
+/// - `accounts: &[AccountInfo]` - The accounts passed to the instruction
+/// - The instruction data variable (default name: `instruction_data`)
+///
+/// # Behavior
+/// - If instruction data starts with event tag: validates authority and returns `Ok(())`
+/// - If instruction data doesn't match: continues normal execution (no early return)
+///
+/// # Example
+/// ```rust
+/// pub fn process_instruction(
+///     program_id: &Pubkey,
+///     accounts: &[AccountInfo],
+///     instruction_data: &[u8],
+/// ) -> ProgramResult {
+///     event_cpi_handler!(instruction_data);
+///
+///     // Your normal instruction processing continues here...
+///     let instruction = MyInstruction::try_from_slice(instruction_data)?;
+///     // ...
+/// }
+/// ```
 #[proc_macro]
 // https://github.com/solana-foundation/anchor/blob/5300d7cf8aaf52da08ce331db3fc8182cd821228/lang/syn/src/codegen/program/handlers.rs#L213
 pub fn event_cpi_handler(input: proc_macro::TokenStream) -> proc_macro::TokenStream {

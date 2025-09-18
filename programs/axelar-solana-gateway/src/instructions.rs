@@ -5,11 +5,19 @@ use core::fmt::Debug;
 use axelar_solana_encoding::types::execute_data::{MerkleisedMessage, SigningVerifierSetInfo};
 use axelar_solana_encoding::types::messages::Message;
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
+use discriminator_utils::prepend_discriminator;
+#[allow(deprecated)]
 use solana_program::bpf_loader_upgradeable;
 use solana_program::instruction::{AccountMeta, Instruction};
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 
+use crate::discriminators::{
+    APPROVE_MESSAGE, CALL_CONTRACT, CLOSE_MESSAGE_PAYLOAD, COMMIT_MESSAGE_PAYLOAD,
+    INITIALIZE_CONFIG, INITIALIZE_MESSAGE_PAYLOAD, INITIALIZE_PAYLOAD_VERIFICATION_SESSION,
+    ROTATE_SIGNERS, TRANSFER_OPERATORSHIP, VALIDATE_MESSAGE, VERIFY_SIGNATURE,
+    WRITE_MESSAGE_PAYLOAD,
+};
 use crate::state::config::{RotationDelaySecs, VerifierSetEpoch};
 use crate::state::verifier_set_tracker::VerifierSetHash;
 
@@ -245,10 +253,12 @@ pub fn approve_message(
     verification_session_pda: Pubkey,
     incoming_message_pda: Pubkey,
 ) -> Result<Instruction, ProgramError> {
-    let data = to_vec(&GatewayInstruction::ApproveMessage {
+    let instruction_data = to_vec(&GatewayInstruction::ApproveMessage {
         message,
         payload_merkle_root,
     })?;
+
+    let data = prepend_discriminator(APPROVE_MESSAGE, &instruction_data);
 
     let accounts = vec![
         AccountMeta::new_readonly(gateway_root_pda, false),
@@ -280,9 +290,11 @@ pub fn rotate_signers(
     operator: Option<Pubkey>,
     new_verifier_set_merkle_root: [u8; 32],
 ) -> Result<Instruction, ProgramError> {
-    let data = to_vec(&GatewayInstruction::RotateSigners {
+    let instruction_data = to_vec(&GatewayInstruction::RotateSigners {
         new_verifier_set_merkle_root,
     })?;
+
+    let data = prepend_discriminator(ROTATE_SIGNERS, &instruction_data);
 
     let mut accounts = vec![
         AccountMeta::new(gateway_root_pda, false),
@@ -319,7 +331,7 @@ pub fn call_contract(
     destination_contract_address: String,
     payload: Vec<u8>,
 ) -> Result<Instruction, ProgramError> {
-    let data = to_vec(&GatewayInstruction::CallContract {
+    let instruction_data = to_vec(&GatewayInstruction::CallContract {
         destination_chain,
         destination_contract_address,
         payload,
@@ -334,6 +346,8 @@ pub fn call_contract(
         ),
         AccountMeta::new_readonly(gateway_root_pda, false),
     ];
+
+    let data = prepend_discriminator(CALL_CONTRACT, &instruction_data);
 
     Ok(Instruction {
         program_id: gateway_program_id,
@@ -370,13 +384,16 @@ pub fn initialize_config(
         AccountMeta::new(initial_verifier_set.pda, false),
     ];
 
-    let data = to_vec(&GatewayInstruction::InitializeConfig(InitializeConfig {
+    let instruction_data = to_vec(&GatewayInstruction::InitializeConfig(InitializeConfig {
         domain_separator,
         initial_verifier_set,
         minimum_rotation_delay,
         operator,
         previous_verifier_retention,
     }))?;
+
+    let data = prepend_discriminator(INITIALIZE_CONFIG, &instruction_data);
+
     Ok(Instruction {
         program_id: crate::id(),
         accounts,
@@ -404,9 +421,11 @@ pub fn initialize_payload_verification_session(
         AccountMeta::new_readonly(solana_program::system_program::id(), false),
     ];
 
-    let data = to_vec(&GatewayInstruction::InitializePayloadVerificationSession {
+    let instruction_data = to_vec(&GatewayInstruction::InitializePayloadVerificationSession {
         payload_merkle_root,
     })?;
+
+    let data = prepend_discriminator(INITIALIZE_PAYLOAD_VERIFICATION_SESSION, &instruction_data);
 
     Ok(Instruction {
         program_id: crate::id(),
@@ -436,10 +455,12 @@ pub fn verify_signature(
         AccountMeta::new_readonly(verifier_set_tracker_pda, false),
     ];
 
-    let data = to_vec(&GatewayInstruction::VerifySignature {
+    let instruction_data = to_vec(&GatewayInstruction::VerifySignature {
         payload_merkle_root,
         verifier_info,
     })?;
+
+    let data = prepend_discriminator(VERIFY_SIGNATURE, &instruction_data);
 
     Ok(Instruction {
         program_id: crate::id(),
@@ -463,7 +484,9 @@ pub fn validate_message(
         AccountMeta::new_readonly(*signing_pda, true),
     ];
 
-    let data = borsh::to_vec(&GatewayInstruction::ValidateMessage { message })?;
+    let instruction_data = borsh::to_vec(&GatewayInstruction::ValidateMessage { message })?;
+
+    let data = prepend_discriminator(VALIDATE_MESSAGE, &instruction_data);
 
     Ok(Instruction {
         program_id: crate::id(),
@@ -499,10 +522,14 @@ pub fn initialize_message_payload(
         command_id,
     };
 
+    let instruction_data = borsh::to_vec(&instruction)?;
+
+    let data = prepend_discriminator(INITIALIZE_MESSAGE_PAYLOAD, &instruction_data);
+
     Ok(Instruction {
         program_id: crate::id(),
         accounts,
-        data: borsh::to_vec(&instruction)?,
+        data,
     })
 }
 
@@ -531,10 +558,15 @@ pub fn write_message_payload(
         bytes: bytes.to_vec(),
         command_id,
     };
+
+    let instruction_data = borsh::to_vec(&instruction)?;
+
+    let data = prepend_discriminator(WRITE_MESSAGE_PAYLOAD, &instruction_data);
+
     Ok(Instruction {
         program_id: crate::id(),
         accounts,
-        data: borsh::to_vec(&instruction)?,
+        data,
     })
 }
 
@@ -557,12 +589,15 @@ pub fn commit_message_payload(
         AccountMeta::new_readonly(incoming_message_pda, false),
         AccountMeta::new(message_payload_pda, false),
     ];
-
     let instruction = GatewayInstruction::CommitMessagePayload { command_id };
+    let instruction_data = borsh::to_vec(&instruction)?;
+
+    let data = prepend_discriminator(COMMIT_MESSAGE_PAYLOAD, &instruction_data);
+
     Ok(Instruction {
         program_id: crate::id(),
         accounts,
-        data: borsh::to_vec(&instruction)?,
+        data,
     })
 }
 
@@ -585,10 +620,14 @@ pub fn close_message_payload(
         AccountMeta::new(message_payload_pda, false),
     ];
     let instruction = GatewayInstruction::CloseMessagePayload { command_id };
+    let instruction_data = borsh::to_vec(&instruction)?;
+
+    let data = prepend_discriminator(CLOSE_MESSAGE_PAYLOAD, &instruction_data);
+
     Ok(Instruction {
         program_id: crate::id(),
         accounts,
-        data: borsh::to_vec(&instruction)?,
+        data,
     })
 }
 
@@ -612,7 +651,9 @@ pub fn transfer_operatorship(
         AccountMeta::new_readonly(new_operator, false),
     ];
 
-    let data = borsh::to_vec(&GatewayInstruction::TransferOperatorship)?;
+    let instruction_data = borsh::to_vec(&GatewayInstruction::TransferOperatorship)?;
+
+    let data = prepend_discriminator(TRANSFER_OPERATORSHIP, &instruction_data);
 
     Ok(Instruction {
         program_id: crate::id(),

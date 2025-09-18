@@ -3,11 +3,18 @@
 //! This module provides constructors and definitions for all instructions that can be issued to the
 
 use borsh::{BorshDeserialize, BorshSerialize};
+use discriminator_utils::prepend_discriminator;
 use solana_program::program_error::ProgramError;
 use solana_program::system_program;
 use solana_program::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
+};
+
+use crate::discriminators::{
+    ADD_NATIVE_GAS, ADD_SPL_GAS, COLLECT_NATIVE_FEES, COLLECT_SPL_FEES, INIT_CONFIG,
+    PAY_NATIVE_FOR_CONTRACT_CALL, PAY_SPL_FOR_CONTRACT_CALL, REFUND_NATIVE_FEES, REFUND_SPL_FEES,
+    TRANSFER_OPERATORSHIP,
 };
 
 /// Top-level instructions supported by the Axelar Solana Gas Service program.
@@ -169,7 +176,10 @@ pub enum PayWithNativeToken {
 /// # Errors
 /// - ix data cannot be serialized
 pub fn init_config(payer: &Pubkey, operator: &Pubkey) -> Result<Instruction, ProgramError> {
-    let ix_data = borsh::to_vec(&GasServiceInstruction::Initialize)?;
+    let instruction_data = borsh::to_vec(&GasServiceInstruction::Initialize)?;
+
+    let data = prepend_discriminator(INIT_CONFIG, &instruction_data);
+
     let (config_pda, _bump) = crate::get_config_pda();
 
     let accounts = vec![
@@ -182,7 +192,7 @@ pub fn init_config(payer: &Pubkey, operator: &Pubkey) -> Result<Instruction, Pro
     Ok(Instruction {
         program_id: crate::ID,
         accounts,
-        data: ix_data,
+        data,
     })
 }
 
@@ -194,7 +204,7 @@ pub fn transfer_operatorship(
     current_operator: &Pubkey,
     new_operator: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
-    let ix_data = borsh::to_vec(&GasServiceInstruction::TransferOperatorship)?;
+    let instruction_data = borsh::to_vec(&GasServiceInstruction::TransferOperatorship)?;
     let (config_pda, _bump) = crate::get_config_pda();
 
     let accounts = vec![
@@ -203,10 +213,12 @@ pub fn transfer_operatorship(
         AccountMeta::new(config_pda, false),
     ];
 
+    let data = prepend_discriminator(TRANSFER_OPERATORSHIP, &instruction_data);
+
     Ok(Instruction {
         program_id: crate::ID,
         accounts,
-        data: ix_data,
+        data,
     })
 }
 
@@ -224,7 +236,7 @@ pub fn pay_native_for_contract_call_instruction(
     params: Vec<u8>,
     gas_fee_amount: u64,
 ) -> Result<Instruction, ProgramError> {
-    let ix_data = borsh::to_vec(&GasServiceInstruction::Native(
+    let instruction_data = borsh::to_vec(&GasServiceInstruction::Native(
         PayWithNativeToken::ForContractCall {
             destination_chain,
             destination_address,
@@ -234,6 +246,9 @@ pub fn pay_native_for_contract_call_instruction(
             gas_fee_amount,
         },
     ))?;
+
+    let data = prepend_discriminator(PAY_NATIVE_FOR_CONTRACT_CALL, &instruction_data);
+
     let (config_pda, _bump) = crate::get_config_pda();
 
     let accounts = vec![
@@ -245,7 +260,7 @@ pub fn pay_native_for_contract_call_instruction(
     Ok(Instruction {
         program_id: crate::ID,
         accounts,
-        data: ix_data,
+        data,
     })
 }
 
@@ -260,12 +275,16 @@ pub fn add_native_gas_instruction(
     gas_fee_amount: u64,
     refund_address: Pubkey,
 ) -> Result<Instruction, ProgramError> {
-    let ix_data = borsh::to_vec(&GasServiceInstruction::Native(PayWithNativeToken::AddGas {
-        tx_hash,
-        log_index,
-        gas_fee_amount,
-        refund_address,
-    }))?;
+    let instruction_data =
+        borsh::to_vec(&GasServiceInstruction::Native(PayWithNativeToken::AddGas {
+            tx_hash,
+            log_index,
+            gas_fee_amount,
+            refund_address,
+        }))?;
+
+    let data = prepend_discriminator(ADD_NATIVE_GAS, &instruction_data);
+
     let (config_pda, _bump) = crate::get_config_pda();
 
     let accounts = vec![
@@ -277,7 +296,7 @@ pub fn add_native_gas_instruction(
     Ok(Instruction {
         program_id: crate::ID,
         accounts,
-        data: ix_data,
+        data,
     })
 }
 
@@ -290,9 +309,12 @@ pub fn collect_native_fees_instruction(
     receiver: &Pubkey,
     amount: u64,
 ) -> Result<Instruction, ProgramError> {
-    let ix_data = borsh::to_vec(&GasServiceInstruction::Native(
+    let instruction_data = borsh::to_vec(&GasServiceInstruction::Native(
         PayWithNativeToken::CollectFees { amount },
     ))?;
+
+    let data = prepend_discriminator(COLLECT_NATIVE_FEES, &instruction_data);
+
     let (config_pda, _bump) = crate::get_config_pda();
 
     let accounts = vec![
@@ -304,7 +326,7 @@ pub fn collect_native_fees_instruction(
     Ok(Instruction {
         program_id: crate::ID,
         accounts,
-        data: ix_data,
+        data,
     })
 }
 
@@ -319,11 +341,15 @@ pub fn refund_native_fees_instruction(
     log_index: u64,
     fees: u64,
 ) -> Result<Instruction, ProgramError> {
-    let ix_data = borsh::to_vec(&GasServiceInstruction::Native(PayWithNativeToken::Refund {
-        tx_hash,
-        log_index,
-        fees,
-    }))?;
+    let instruction_data =
+        borsh::to_vec(&GasServiceInstruction::Native(PayWithNativeToken::Refund {
+            tx_hash,
+            log_index,
+            fees,
+        }))?;
+
+    let data = prepend_discriminator(REFUND_NATIVE_FEES, &instruction_data);
+
     let (config_pda, _) = crate::get_config_pda();
 
     let accounts = vec![
@@ -335,7 +361,7 @@ pub fn refund_native_fees_instruction(
     Ok(Instruction {
         program_id: crate::ID,
         accounts,
-        data: ix_data,
+        data,
     })
 }
 
@@ -358,7 +384,7 @@ pub fn pay_spl_for_contract_call_instruction(
     signer_pubkeys: &[Pubkey],
     decimals: u8,
 ) -> Result<Instruction, ProgramError> {
-    let ix_data = borsh::to_vec(&GasServiceInstruction::SplToken(
+    let instruction_data = borsh::to_vec(&GasServiceInstruction::SplToken(
         PayWithSplToken::ForContractCall {
             destination_chain,
             destination_address,
@@ -369,6 +395,9 @@ pub fn pay_spl_for_contract_call_instruction(
             gas_fee_amount,
         },
     ))?;
+
+    let data = prepend_discriminator(PAY_SPL_FOR_CONTRACT_CALL, &instruction_data);
+
     let (config_pda, _bump) = crate::get_config_pda();
     let config_pda_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
         &config_pda,
@@ -392,7 +421,7 @@ pub fn pay_spl_for_contract_call_instruction(
     Ok(Instruction {
         program_id: crate::ID,
         accounts,
-        data: ix_data,
+        data,
     })
 }
 
@@ -413,13 +442,17 @@ pub fn add_spl_gas_instruction(
     refund_address: Pubkey,
     decimals: u8,
 ) -> Result<Instruction, ProgramError> {
-    let ix_data = borsh::to_vec(&GasServiceInstruction::SplToken(PayWithSplToken::AddGas {
-        tx_hash,
-        log_index,
-        decimals,
-        gas_fee_amount,
-        refund_address,
-    }))?;
+    let instruction_data =
+        borsh::to_vec(&GasServiceInstruction::SplToken(PayWithSplToken::AddGas {
+            tx_hash,
+            log_index,
+            decimals,
+            gas_fee_amount,
+            refund_address,
+        }))?;
+
+    let data = prepend_discriminator(ADD_SPL_GAS, &instruction_data);
+
     let (config_pda, _bump) = crate::get_config_pda();
     let config_pda_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
         &config_pda,
@@ -442,7 +475,7 @@ pub fn add_spl_gas_instruction(
     Ok(Instruction {
         program_id: crate::ID,
         accounts,
-        data: ix_data,
+        data,
     })
 }
 
@@ -459,9 +492,12 @@ pub fn collect_spl_fees_instruction(
     amount: u64,
     decimals: u8,
 ) -> Result<Instruction, ProgramError> {
-    let ix_data = borsh::to_vec(&GasServiceInstruction::SplToken(
+    let instruction_data = borsh::to_vec(&GasServiceInstruction::SplToken(
         PayWithSplToken::CollectFees { amount, decimals },
     ))?;
+
+    let data = prepend_discriminator(COLLECT_SPL_FEES, &instruction_data);
+
     let (config_pda, _bump) = crate::get_config_pda();
     let config_pda_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
         &config_pda,
@@ -481,7 +517,7 @@ pub fn collect_spl_fees_instruction(
     Ok(Instruction {
         program_id: crate::ID,
         accounts,
-        data: ix_data,
+        data,
     })
 }
 
@@ -500,12 +536,16 @@ pub fn refund_spl_fees_instruction(
     fees: u64,
     decimals: u8,
 ) -> Result<Instruction, ProgramError> {
-    let ix_data = borsh::to_vec(&GasServiceInstruction::SplToken(PayWithSplToken::Refund {
-        decimals,
-        tx_hash,
-        log_index,
-        fees,
-    }))?;
+    let instruction_data =
+        borsh::to_vec(&GasServiceInstruction::SplToken(PayWithSplToken::Refund {
+            decimals,
+            tx_hash,
+            log_index,
+            fees,
+        }))?;
+
+    let data = prepend_discriminator(REFUND_SPL_FEES, &instruction_data);
+
     let (config_pda, _bump) = crate::get_config_pda();
     let config_pda_ata = spl_associated_token_account::get_associated_token_address_with_program_id(
         &config_pda,
@@ -525,6 +565,6 @@ pub fn refund_spl_fees_instruction(
     Ok(Instruction {
         program_id: crate::ID,
         accounts,
-        data: ix_data,
+        data,
     })
 }

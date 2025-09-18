@@ -49,6 +49,7 @@ alloy-sol-types.workspace = true
 base64.workspace = true
 axelar-solana-gateway = { workspace = true, features = ["no-entrypoint"] }
 role-management.workspace = true
+discriminator-utils = { path = "../../crates/discriminator-utils" }
 
 [dev-dependencies]
 solana-logger.workspace = true
@@ -61,3 +62,4 @@ axelar-solana-memo-program = { workspace = true, features = ["no-entrypoint"] }
 dummy-axelar-solana-gateway = { workspace = true, features = ["no-entrypoint"] }
 uuid = { version = "1.11.0", features = ["v4"] }
 serde.workspace = true
+discriminator-utils = { path = "../../crates/discriminator-utils" }

@@ -8,6 +8,7 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
+discriminator-utils = { path = "../../crates/discriminator-utils" }
 solana-program.workspace = true
 spl-token = { workspace = true, features = ["no-entrypoint"] }
 spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
@@ -18,6 +19,7 @@ borsh.workspace = true
 program-utils.workspace = true
 
 [dev-dependencies]
+discriminator-utils = { path = "../../crates/discriminator-utils" }
 solana-sdk.workspace = true
 solana-program-test.workspace = true
 axelar-solana-gateway-test-fixtures.workspace = true
@@ -47,6 +49,6 @@ testnet = [
 ]
 mainnet = [
     "axelar-solana-gateway-test-fixtures/mainnet",
-    "program-utils/mainnet", 
+    "program-utils/mainnet",
 ]
 default = ["devnet-amplifier"]

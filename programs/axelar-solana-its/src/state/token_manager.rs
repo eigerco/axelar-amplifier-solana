@@ -8,6 +8,7 @@ use program_utils::pda::BorshPda;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 
+use crate::discriminators::TOKEN_MANAGER_PDA_DISCRIMINATOR;
 use crate::state::flow_limit::FlowState;
 
 /// There are different types of token managers available for developers to
@@ -137,6 +138,7 @@ impl TryFrom<u8> for Type {
 /// Struct containing state of a `TokenManager`
 #[derive(Debug, Eq, PartialEq, Clone, BorshSerialize, BorshDeserialize)]
 pub struct TokenManager {
+    pub discriminator: [u8; 8],
     /// The type of `TokenManager`.
     pub ty: Type,
 
@@ -167,6 +169,7 @@ impl TokenManager {
         bump: u8,
     ) -> Self {
         Self {
+            discriminator: TOKEN_MANAGER_PDA_DISCRIMINATOR,
             ty,
             token_id,
             token_address,

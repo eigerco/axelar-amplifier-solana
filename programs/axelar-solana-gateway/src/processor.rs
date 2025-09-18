@@ -53,7 +53,7 @@ impl Processor {
         accounts: &[AccountInfo<'_>],
         input: &[u8],
     ) -> ProgramResult {
-        let instruction = GatewayInstruction::try_from_slice(input)?;
+        let instruction = GatewayInstruction::try_from_slice(&input[8..])?;
         check_program_account(*program_id)?;
 
         match instruction {

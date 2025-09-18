@@ -1,10 +1,17 @@
 //! Instructions for the token manager.
 
 use borsh::to_vec;
+use discriminator_utils::prepend_discriminator;
 use solana_program::instruction::AccountMeta;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
+
+use crate::discriminators::{
+    ACCEPT_TOKEN_MANAGER_OPERATORSHIP, ADD_TOKEN_MANAGER_FLOW_LIMITER, HANDOVER_MINT_AUTHORITY,
+    PROPOSE_TOKEN_MANAGER_OPERATORSHIP, REMOVE_TOKEN_MANAGER_FLOW_LIMITER,
+    SET_TOKEN_MANAGER_FLOW_LIMIT, TRANSFER_TOKEN_MANAGER_OPERATORSHIP,
+};
 
 use super::InterchainTokenServiceInstruction;
 
@@ -26,7 +33,10 @@ pub fn set_flow_limit(
     let (its_user_roles_pda, _) =
         role_management::find_user_roles_pda(&crate::id(), &its_root_pda, &payer);
 
-    let data = to_vec(&InterchainTokenServiceInstruction::SetTokenManagerFlowLimit { flow_limit })?;
+    let instruction_data =
+        to_vec(&InterchainTokenServiceInstruction::SetTokenManagerFlowLimit { flow_limit })?;
+
+    let data = prepend_discriminator(SET_TOKEN_MANAGER_FLOW_LIMIT, &instruction_data);
 
     let accounts = vec![
         AccountMeta::new(payer, true),
@@ -71,7 +81,9 @@ pub fn add_flow_limiter(
         AccountMeta::new(flow_limiter_roles_pda, false),
     ];
 
-    let data = to_vec(&InterchainTokenServiceInstruction::AddTokenManagerFlowLimiter)?;
+    let instruction_data = to_vec(&InterchainTokenServiceInstruction::AddTokenManagerFlowLimiter)?;
+
+    let data = prepend_discriminator(ADD_TOKEN_MANAGER_FLOW_LIMITER, &instruction_data);
 
     Ok(solana_program::instruction::Instruction {
         program_id: crate::id(),
@@ -107,7 +119,10 @@ pub fn remove_flow_limiter(
         AccountMeta::new(flow_limiter_roles_pda, false),
     ];
 
-    let data = to_vec(&InterchainTokenServiceInstruction::RemoveTokenManagerFlowLimiter)?;
+    let instruction_data =
+        to_vec(&InterchainTokenServiceInstruction::RemoveTokenManagerFlowLimiter)?;
+
+    let data = prepend_discriminator(REMOVE_TOKEN_MANAGER_FLOW_LIMITER, &instruction_data);
 
     Ok(solana_program::instruction::Instruction {
         program_id: crate::id(),
@@ -143,7 +158,10 @@ pub fn transfer_operatorship(
         AccountMeta::new(destination_roles_pda, false),
     ];
 
-    let data = to_vec(&InterchainTokenServiceInstruction::TransferTokenManagerOperatorship)?;
+    let instruction_data =
+        to_vec(&InterchainTokenServiceInstruction::TransferTokenManagerOperatorship)?;
+
+    let data = prepend_discriminator(TRANSFER_TOKEN_MANAGER_OPERATORSHIP, &instruction_data);
 
     Ok(solana_program::instruction::Instruction {
         program_id: crate::id(),
@@ -182,7 +200,10 @@ pub fn propose_operatorship(
         AccountMeta::new(proposal_pda, false),
     ];
 
-    let data = to_vec(&InterchainTokenServiceInstruction::ProposeTokenManagerOperatorship)?;
+    let instruction_data =
+        to_vec(&InterchainTokenServiceInstruction::ProposeTokenManagerOperatorship)?;
+
+    let data = prepend_discriminator(PROPOSE_TOKEN_MANAGER_OPERATORSHIP, &instruction_data);
 
     Ok(solana_program::instruction::Instruction {
         program_id: crate::id(),
@@ -221,7 +242,10 @@ pub fn accept_operatorship(
         AccountMeta::new(proposal_pda, false),
     ];
 
-    let data = to_vec(&InterchainTokenServiceInstruction::AcceptTokenManagerOperatorship)?;
+    let instruction_data =
+        to_vec(&InterchainTokenServiceInstruction::AcceptTokenManagerOperatorship)?;
+
+    let data = prepend_discriminator(ACCEPT_TOKEN_MANAGER_OPERATORSHIP, &instruction_data);
 
     Ok(solana_program::instruction::Instruction {
         program_id: crate::id(),
@@ -256,7 +280,10 @@ pub fn handover_mint_authority(
         AccountMeta::new_readonly(system_program::ID, false),
     ];
 
-    let data = to_vec(&InterchainTokenServiceInstruction::HandoverMintAuthority { token_id })?;
+    let instruction_data =
+        to_vec(&InterchainTokenServiceInstruction::HandoverMintAuthority { token_id })?;
+
+    let data = prepend_discriminator(HANDOVER_MINT_AUTHORITY, &instruction_data);
 
     Ok(solana_program::instruction::Instruction {
         program_id: crate::id(),

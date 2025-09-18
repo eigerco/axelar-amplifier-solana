@@ -8,6 +8,8 @@ use solana_program::pubkey::Pubkey;
 #[repr(C)]
 #[derive(Zeroable, Pod, Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Config {
+    /// Anchor compatible discriminator
+    pub discriminator: [u8; 8],
     /// Operator with permission to give refunds & withdraw funds
     pub operator: Pubkey,
     /// The bump seed used to derive the PDA, ensuring the address is valid.

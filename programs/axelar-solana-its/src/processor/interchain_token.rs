@@ -496,6 +496,10 @@ pub(crate) fn process_mint<'a>(accounts: &'a [AccountInfo<'a>], amount: u64) -> 
     let token_program = next_account_info(accounts_iter)?;
 
     msg!("Instruction: MintInterchainToken");
+
+    let its_root_config = InterchainTokenService::load(its_root_pda)?;
+    assert_valid_its_root_pda(its_root_pda, its_root_config.bump)?;
+
     let token_manager = TokenManager::load(token_manager_pda)?;
     assert_valid_token_manager_pda(
         token_manager_pda,

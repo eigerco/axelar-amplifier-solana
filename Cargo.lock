@@ -34,23 +34,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 
 [[package]]
-name = "adummy-axelar-solana-event-cpi"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "borsh 1.5.7",
- "hex",
- "mpl-token-metadata",
- "pretty_assertions",
- "program-utils",
- "serde_json",
- "solana-program",
- "solana-program-test",
- "solana-sdk",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "aead"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2259,6 +2242,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1435fa1053d8b2fbbe9be7e97eca7f33d37b28409959813daefc1446a14247f1"
 
 [[package]]
+name = "dummy-axelar-solana-event-cpi"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "borsh 1.5.7",
+ "event-cpi",
+ "event-cpi-macros",
+ "hex",
+ "pretty_assertions",
+ "program-utils",
+ "serde_json",
+ "solana-cli-config",
+ "solana-client",
+ "solana-program",
+ "solana-program-test",
+ "solana-sdk",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "dummy-axelar-solana-gateway"
 version = "0.1.0"
 dependencies = [
@@ -2835,7 +2838,6 @@ version = "0.1.0"
 dependencies = [
  "borsh 1.5.7",
  "bs58",
- "bytemuck",
  "serde",
  "sha2 0.10.9",
  "solana-program",
@@ -2845,22 +2847,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "event-cpi-macro"
+name = "event-cpi-macros"
 version = "0.1.0"
 dependencies = [
  "borsh 1.5.7",
- "bs58",
- "bytemuck",
  "event-cpi",
  "proc-macro2",
  "quote",
- "serde",
- "sha2 0.10.9",
  "solana-program",
  "solana-program-test",
  "solana-sdk",
  "syn 1.0.109",
- "thiserror 1.0.69",
 ]
 
 [[package]]

@@ -1,6 +1,5 @@
-use borsh::{BorshDeserialize, BorshSerialize};
 use event_cpi::{CpiEvent, Discriminator};
-use event_cpi_macro::{emit_cpi, event, event_cpi_accounts};
+use event_cpi_macros::{emit_cpi, event, event_cpi_accounts};
 use solana_program::pubkey::Pubkey;
 use solana_sdk::{account_info::AccountInfo, clock::Epoch, program_error::ProgramError};
 
@@ -37,11 +36,6 @@ fn test_discriminator() {
         params: vec![1, 2, 3],
         gas_fee_amount: 100,
     };
-
-    println!(
-        "Discriminator: {:?}",
-        NativeGasPaidForContractCallEvent::DISCRIMINATOR
-    );
 
     let data = event.data();
     assert_eq!(

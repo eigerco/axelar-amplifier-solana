@@ -56,7 +56,7 @@ fn main() -> Result<()> {
         &PROGRAM_ID,
     );
 
-    // Add the event authority account (needs to be a signer for CPI)
+    // Add the event authority account
     instruction
         .accounts
         .push(AccountMeta::new_readonly(event_authority, false));

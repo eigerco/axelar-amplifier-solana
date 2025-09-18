@@ -66,7 +66,7 @@ fn test_emit_cpi() -> Result<(), ProgramError> {
     let mut event_authority_data = vec![0u8; 32];
     let event_authority_account = AccountInfo::new(
         &event_authority_key,
-        true,  // is_signer
+        false, // is_signer
         false, // is_writable
         &mut event_authority_lamports,
         &mut event_authority_data,

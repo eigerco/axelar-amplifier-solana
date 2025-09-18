@@ -8,7 +8,6 @@ workspace = true
 
 [dependencies]
 borsh.workspace = true
-bytemuck.workspace = true
 solana-program.workspace = true
 serde.workspace = true
 thiserror.workspace = true

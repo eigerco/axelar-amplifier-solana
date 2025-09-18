@@ -19,11 +19,13 @@ pub fn event(
     let discriminator = gen_discriminator("event", event_name);
 
     let ret = quote! {
-        #[derive(BorshSerialize, BorshDeserialize)]
+        #[derive(borsh::BorshSerialize, borsh::BorshDeserialize)]
         #event_strct
 
         impl event_cpi::CpiEvent for #event_name {
             fn data(&self) -> Vec<u8> {
+                use borsh::BorshSerialize;
+
                 let mut data = Vec::with_capacity(256);
                 data.extend_from_slice(#event_name::DISCRIMINATOR);
                 self.serialize(&mut data).unwrap();
@@ -125,17 +127,22 @@ pub fn event_cpi_handler(input: proc_macro::TokenStream) -> proc_macro::TokenStr
     proc_macro::TokenStream::from(quote! {
         // Dispatch Event CPI instruction
         if #instruction_data_name.starts_with(event_cpi::EVENT_IX_TAG_LE) {
+            solana_program::msg!("EventCpiInstruction");
+
             let given_event_authority = solana_program::account_info::next_account_info(&mut accounts.iter())?;
             if !given_event_authority.is_signer {
-                return Err(ProgramError::MissingRequiredSignature);
+                return Err(solana_program::program_error::ProgramError::MissingRequiredSignature);
             }
 
             let (expected_event_authority, _) =
-                Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], program_id);
+                solana_program::pubkey::Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], program_id);
 
-            if given_event_authority.key() != expected_event_authority {
-                return Err(ProgramError::InvalidAccountData);
+            if *given_event_authority.key != expected_event_authority {
+                return Err(solana_program::program_error::ProgramError::InvalidAccountData);
             }
+
+            // Early return
+            return Ok(())
         }
     })
 }

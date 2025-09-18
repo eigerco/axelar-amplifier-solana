@@ -1,5 +1,5 @@
 [package]
-name = "adummy-axelar-solana-event-cpi"
+name = "dummy-axelar-solana-event-cpi"
 version = "0.1.0"
 description = "Utility program to test Event CPI functionality"
 edition = "2021"
@@ -24,17 +24,23 @@ mainnet = [
 ]
 default = ["devnet-amplifier"]
 
+[[example]]
+name = "emit_memo"
+
 [dependencies]
 borsh.workspace = true
-hex.workspace = true
-mpl-token-metadata.workspace = true
 program-utils = { workspace = true, default-features = false }
 solana-program.workspace = true
+event-cpi.workspace = true
+event-cpi-macros.workspace = true
 
 [dev-dependencies]
 solana-program-test.workspace = true
 solana-sdk.workspace = true
+solana-client.workspace = true
+solana-cli-config = "~2.1"
 pretty_assertions.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
+hex.workspace = true

@@ -1,0 +1,19 @@
+[package]
+name = "event-cpi"
+version = "0.1.0"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[dependencies]
+borsh.workspace = true
+solana-program.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+bs58 = "0.5"
+sha2 = "0.10.9"
+
+[dev-dependencies]
+solana-sdk.workspace = true
+solana-program-test.workspace = true

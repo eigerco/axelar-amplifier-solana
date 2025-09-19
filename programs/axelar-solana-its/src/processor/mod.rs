@@ -323,7 +323,8 @@ fn process_transfer_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -> Program
 
     let system_account = next_account_info(accounts_iter)?;
     let payer = next_account_info(accounts_iter)?;
-    let payer_roles_account = next_account_info(accounts_iter)?;
+    let origin_user_account = next_account_info(accounts_iter)?;
+    let origin_roles_account = next_account_info(accounts_iter)?;
     let resource = next_account_info(accounts_iter)?;
     let destination_user_account = next_account_info(accounts_iter)?;
     let destination_roles_account = next_account_info(accounts_iter)?;
@@ -336,19 +337,21 @@ fn process_transfer_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -> Program
     let role_add_accounts = RoleAddAccounts {
         system_account,
         payer,
-        payer_roles_account,
+        authority_user_account: origin_user_account,
+        authority_roles_account: origin_roles_account,
         resource,
-        destination_user_account,
-        destination_roles_account,
+        target_user_account: destination_user_account,
+        target_roles_account: destination_roles_account,
     };
 
     let role_remove_accounts = RoleRemoveAccounts {
         system_account,
         payer,
-        payer_roles_account,
+        authority_user_account: origin_user_account,
+        authority_roles_account: origin_roles_account,
         resource,
-        origin_user_account: payer,
-        origin_roles_account: payer_roles_account,
+        target_user_account: origin_user_account,
+        target_roles_account: origin_roles_account,
     };
 
     role_management::processor::add(
@@ -371,11 +374,23 @@ fn process_propose_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -> ProgramR
 
     let system_account = next_account_info(accounts_iter)?;
     let payer = next_account_info(accounts_iter)?;
-    let payer_roles_account = next_account_info(accounts_iter)?;
+    let proposer_user_account = next_account_info(accounts_iter)?;
+    let proposer_roles_account = next_account_info(accounts_iter)?;
     let resource = next_account_info(accounts_iter)?;
     let destination_user_account = next_account_info(accounts_iter)?;
     let destination_roles_account = next_account_info(accounts_iter)?;
     let proposal_account = next_account_info(accounts_iter)?;
+
+    //  let accounts = vec![
+    //     AccountMeta::new_readonly(solana_program::system_program::id(), false),
+    //     AccountMeta::new(payer, true),
+    //     AccountMeta::new_readonly(proposer, false),
+    //     AccountMeta::new_readonly(proposer_roles_pda, false),
+    //     AccountMeta::new_readonly(its_root_pda, false),
+    //     AccountMeta::new_readonly(to, false),
+    //     AccountMeta::new_readonly(destination_roles_pda, false),
+    //     AccountMeta::new(proposal_pda, false),
+    // ];
 
     msg!("Instruction: ProposeOperatorship");
 
@@ -385,12 +400,11 @@ fn process_propose_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -> ProgramR
     let role_management_accounts = RoleTransferWithProposalAccounts {
         system_account,
         payer,
-        payer_roles_account,
+        origin_user_account: proposer_user_account,
+        origin_roles_account: proposer_roles_account,
         resource,
         destination_user_account,
         destination_roles_account,
-        origin_user_account: payer,
-        origin_roles_account: payer_roles_account,
         proposal_account,
     };
 
@@ -401,7 +415,8 @@ fn process_accept_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -> ProgramRe
     let accounts_iter = &mut accounts.iter();
     let system_account = next_account_info(accounts_iter)?;
     let payer = next_account_info(accounts_iter)?;
-    let payer_roles_account = next_account_info(accounts_iter)?;
+    let role_receiver_account = next_account_info(accounts_iter)?;
+    let role_receiver_roles_account = next_account_info(accounts_iter)?;
     let resource = next_account_info(accounts_iter)?;
     let origin_user_account = next_account_info(accounts_iter)?;
     let origin_roles_account = next_account_info(accounts_iter)?;
@@ -412,10 +427,9 @@ fn process_accept_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -> ProgramRe
     let role_management_accounts = RoleTransferWithProposalAccounts {
         system_account,
         payer,
-        payer_roles_account,
         resource,
-        destination_user_account: payer,
-        destination_roles_account: payer_roles_account,
+        destination_user_account: role_receiver_account,
+        destination_roles_account: role_receiver_roles_account,
         origin_user_account,
         origin_roles_account,
         proposal_account,

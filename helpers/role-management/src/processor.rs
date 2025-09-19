@@ -23,8 +23,8 @@ pub fn propose<F: RolesFlags>(
     ensure_signer_roles(
         program_id,
         accounts.resource,
-        accounts.payer,
-        accounts.payer_roles_account,
+        accounts.origin_user_account,
+        accounts.origin_roles_account,
         roles,
     )?;
 
@@ -68,7 +68,7 @@ pub fn propose<F: RolesFlags>(
         &[
             seed_prefixes::ROLE_PROPOSAL_SEED,
             accounts.resource.key.as_ref(),
-            accounts.origin_user_account.key.as_ref(),
+            accounts.origin_user_account.key.as_ref(), // which is the same as the authority on this context
             accounts.destination_user_account.key.as_ref(),
             &[proposal_pda_bump],
         ],
@@ -108,8 +108,25 @@ pub fn accept<F: RolesFlags>(
     }
 
     let proposal_account = accounts.proposal_account;
-    let role_remove_accounts = RoleRemoveAccounts::from(accounts);
-    let role_add_accounts = RoleAddAccounts::from(accounts);
+    let role_remove_accounts = RoleRemoveAccounts {
+        system_account: accounts.system_account,
+        payer: accounts.payer,
+        authority_user_account: accounts.destination_user_account,
+        authority_roles_account: accounts.destination_roles_account,
+        target_user_account: accounts.origin_user_account,
+        target_roles_account: accounts.origin_roles_account,
+        resource: accounts.resource,
+    };
+
+    let role_add_accounts = RoleAddAccounts {
+        system_account: accounts.system_account,
+        payer: accounts.payer,
+        resource: accounts.resource,
+        authority_user_account: accounts.destination_user_account,
+        authority_roles_account: accounts.destination_roles_account,
+        target_user_account: accounts.destination_user_account,
+        target_roles_account: accounts.destination_roles_account,
+    };
 
     add(program_id, role_add_accounts, roles, F::empty())?;
     remove(program_id, role_remove_accounts, roles, F::empty())?;
@@ -128,38 +145,38 @@ pub fn add<F: RolesFlags>(
     program_id: &Pubkey,
     accounts: RoleAddAccounts<'_>,
     roles: F,
-    required_payer_roles: F,
+    required_adder_roles: F,
 ) -> ProgramResult {
     ensure_signer_roles(
         program_id,
         accounts.resource,
-        accounts.payer,
-        accounts.payer_roles_account,
-        required_payer_roles,
+        accounts.authority_user_account,
+        accounts.authority_roles_account,
+        required_adder_roles,
     )?;
 
     ensure_proper_account::<F>(
         program_id,
         accounts.resource,
-        accounts.destination_user_account,
-        accounts.destination_roles_account,
+        accounts.target_user_account,
+        accounts.target_roles_account,
     )?;
 
-    if let Ok(mut destination_user_roles) = UserRoles::load(accounts.destination_roles_account) {
+    if let Ok(mut destination_user_roles) = UserRoles::load(accounts.target_roles_account) {
         destination_user_roles.add(roles);
         destination_user_roles.store(
             accounts.payer,
-            accounts.destination_roles_account,
+            accounts.target_roles_account,
             accounts.system_account,
         )?;
     } else {
         let (destination_roles_pda, destination_roles_pda_bump) = crate::find_user_roles_pda(
             program_id,
             accounts.resource.key,
-            accounts.destination_user_account.key,
+            accounts.target_user_account.key,
         );
 
-        if destination_roles_pda != *accounts.destination_roles_account.key {
+        if destination_roles_pda != *accounts.target_roles_account.key {
             msg!("Derived PDA doesn't match given destination roles account address");
             return Err(ProgramError::InvalidArgument);
         }
@@ -167,7 +184,7 @@ pub fn add<F: RolesFlags>(
         let signer_seeds = &[
             seed_prefixes::USER_ROLES_SEED,
             accounts.resource.key.as_ref(),
-            accounts.destination_user_account.key.as_ref(),
+            accounts.target_user_account.key.as_ref(),
             &[destination_roles_pda_bump],
         ];
 
@@ -175,7 +192,7 @@ pub fn add<F: RolesFlags>(
             program_id,
             accounts.system_account,
             accounts.payer,
-            accounts.destination_roles_account,
+            accounts.target_roles_account,
             signer_seeds,
         )?;
     }
@@ -192,29 +209,29 @@ pub fn remove<F: RolesFlags>(
     program_id: &Pubkey,
     accounts: RoleRemoveAccounts<'_>,
     roles: F,
-    required_payer_roles: F,
+    authority_required_roles: F,
 ) -> ProgramResult {
     ensure_signer_roles(
         program_id,
         accounts.resource,
-        accounts.payer,
-        accounts.payer_roles_account,
-        required_payer_roles,
+        accounts.authority_user_account,
+        accounts.authority_roles_account,
+        authority_required_roles,
     )?;
 
     ensure_roles(
         program_id,
         accounts.resource,
-        accounts.origin_user_account,
-        accounts.origin_roles_account,
+        accounts.target_user_account,
+        accounts.target_roles_account,
         roles,
     )?;
 
-    if let Ok(mut destination_user_roles) = UserRoles::load(accounts.origin_roles_account) {
-        destination_user_roles.remove(roles);
-        destination_user_roles.store(
+    if let Ok(mut target_user_roles) = UserRoles::load(accounts.target_roles_account) {
+        target_user_roles.remove(roles);
+        target_user_roles.store(
             accounts.payer,
-            accounts.origin_roles_account,
+            accounts.target_roles_account,
             accounts.system_account,
         )?;
     } else {
@@ -359,7 +376,6 @@ pub fn ensure_proper_account<F: RolesFlags>(
 pub struct RoleTransferWithProposalAccounts<'a> {
     pub system_account: &'a AccountInfo<'a>,
     pub payer: &'a AccountInfo<'a>,
-    pub payer_roles_account: &'a AccountInfo<'a>,
     pub resource: &'a AccountInfo<'a>,
     pub destination_user_account: &'a AccountInfo<'a>,
     pub destination_roles_account: &'a AccountInfo<'a>,
@@ -373,10 +389,11 @@ impl<'a> From<RoleTransferWithProposalAccounts<'a>> for RoleRemoveAccounts<'a> {
         Self {
             system_account: value.system_account,
             payer: value.payer,
-            payer_roles_account: value.payer_roles_account,
+            authority_user_account: value.destination_user_account,
+            authority_roles_account: value.destination_roles_account,
+            target_user_account: value.origin_user_account,
+            target_roles_account: value.origin_roles_account,
             resource: value.resource,
-            origin_user_account: value.origin_user_account,
-            origin_roles_account: value.origin_roles_account,
         }
     }
 }
@@ -386,10 +403,11 @@ impl<'a> From<RoleTransferWithProposalAccounts<'a>> for RoleAddAccounts<'a> {
         Self {
             system_account: value.system_account,
             payer: value.payer,
-            payer_roles_account: value.payer_roles_account,
             resource: value.resource,
-            destination_user_account: value.destination_user_account,
-            destination_roles_account: value.destination_roles_account,
+            authority_user_account: value.destination_user_account,
+            authority_roles_account: value.destination_roles_account,
+            target_user_account: value.destination_user_account,
+            target_roles_account: value.destination_roles_account,
         }
     }
 }
@@ -398,20 +416,22 @@ impl<'a> From<RoleTransferWithProposalAccounts<'a>> for RoleAddAccounts<'a> {
 pub struct RoleAddAccounts<'a> {
     pub system_account: &'a AccountInfo<'a>,
     pub payer: &'a AccountInfo<'a>,
-    pub payer_roles_account: &'a AccountInfo<'a>,
+    pub authority_user_account: &'a AccountInfo<'a>,
+    pub authority_roles_account: &'a AccountInfo<'a>,
     pub resource: &'a AccountInfo<'a>,
-    pub destination_user_account: &'a AccountInfo<'a>,
-    pub destination_roles_account: &'a AccountInfo<'a>,
+    pub target_user_account: &'a AccountInfo<'a>,
+    pub target_roles_account: &'a AccountInfo<'a>,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct RoleRemoveAccounts<'a> {
     pub system_account: &'a AccountInfo<'a>,
     pub payer: &'a AccountInfo<'a>,
-    pub payer_roles_account: &'a AccountInfo<'a>,
+    pub authority_user_account: &'a AccountInfo<'a>,
+    pub authority_roles_account: &'a AccountInfo<'a>,
     pub resource: &'a AccountInfo<'a>,
-    pub origin_user_account: &'a AccountInfo<'a>,
-    pub origin_roles_account: &'a AccountInfo<'a>,
+    pub target_user_account: &'a AccountInfo<'a>,
+    pub target_roles_account: &'a AccountInfo<'a>,
 }
 
 #[cfg(test)]

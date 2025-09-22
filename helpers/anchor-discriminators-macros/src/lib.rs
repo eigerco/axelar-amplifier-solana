@@ -68,9 +68,6 @@ pub fn derive_instruction_discriminator(input: proc_macro::TokenStream) -> proc_
         // Generate discriminator constant
         let discriminator = gen_discriminator(SIGHASH_GLOBAL_NAMESPACE, &variant_name_snake);
 
-        // println!("{SIGHASH_GLOBAL_NAMESPACE}:{variant_name_snake}");
-        // println!("{discriminator}");
-
         discriminator_constants.push(quote! {
             pub const #const_name: [u8; 8] = #discriminator;
         });

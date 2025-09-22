@@ -8,7 +8,7 @@ workspace = true
 
 [dependencies]
 borsh.workspace = true
-serde.workspace = true
+serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
 bs58 = "0.5"
 sha2 = "0.10.9"

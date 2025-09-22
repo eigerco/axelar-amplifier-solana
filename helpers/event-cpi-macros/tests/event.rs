@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use event_cpi::{CpiEvent, Discriminator};
 use event_cpi_macros::{emit_cpi, event, event_cpi_accounts};
 use solana_program::pubkey::Pubkey;
@@ -29,8 +31,8 @@ pub struct NativeGasPaidForContractCallEvent {
 fn test_discriminator() {
     let event = NativeGasPaidForContractCallEvent {
         config_pda: Pubkey::new_unique(),
-        destination_chain: "chain".to_string(),
-        destination_address: "address".to_string(),
+        destination_chain: "chain".to_owned(),
+        destination_address: "address".to_owned(),
         payload_hash: [0u8; 32],
         refund_address: Pubkey::new_unique(),
         params: vec![1, 2, 3],
@@ -38,18 +40,17 @@ fn test_discriminator() {
     };
 
     let data = event.data();
-    assert_eq!(
-        &data[0..8],
-        NativeGasPaidForContractCallEvent::DISCRIMINATOR
-    );
+    #[allow(clippy::indexing_slicing)]
+    let data = &data[..8];
+    assert_eq!(data, NativeGasPaidForContractCallEvent::DISCRIMINATOR);
 }
 
 #[test]
 fn test_emit_cpi() -> Result<(), ProgramError> {
     let event = NativeGasPaidForContractCallEvent {
         config_pda: Pubkey::new_unique(),
-        destination_chain: "chain".to_string(),
-        destination_address: "address".to_string(),
+        destination_chain: "chain".to_owned(),
+        destination_address: "address".to_owned(),
         payload_hash: [0u8; 32],
         refund_address: Pubkey::new_unique(),
         params: vec![1, 2, 3],

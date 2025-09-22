@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 /// This test imitates the account parsing done in ITS and governance programs
 use event_cpi::Discriminator;
 use event_cpi_macros::{emit_cpi, event, event_cpi_accounts};

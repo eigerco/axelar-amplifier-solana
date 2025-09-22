@@ -152,7 +152,7 @@ fn main() -> Result<()> {
         event,
         MemoSentEvent {
             sender: payer.pubkey(),
-            memo: memo,
+            memo,
         }
     );
     println!("Event matches expected values.");

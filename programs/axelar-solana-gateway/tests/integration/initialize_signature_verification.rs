@@ -22,11 +22,13 @@ async fn test_initialize_payload_verification_session() {
     // Action
     let payload_merkle_root = random_bytes();
     let gateway_config_pda = get_gateway_root_config_pda().0;
+    let signing_verifier_set_hash = metadata.init_gateway_config_verifier_set_data().hash;
 
     let ix = axelar_solana_gateway::instructions::initialize_payload_verification_session(
         metadata.payer.pubkey(),
         gateway_config_pda,
         payload_merkle_root,
+        signing_verifier_set_hash,
     )
     .unwrap();
     let _tx_result = metadata.send_tx(&[ix]).await.unwrap();
@@ -52,9 +54,11 @@ async fn test_initialize_payload_verification_session() {
         .await;
 
     assert_eq!(session.bump, bump);
+    let mut expected_verification = SignatureVerification::zeroed();
+    expected_verification.signing_verifier_set_hash = signing_verifier_set_hash;
     assert_eq!(
         session.signature_verification,
-        SignatureVerification::zeroed()
+        expected_verification
     );
 }
 
@@ -70,11 +74,13 @@ async fn test_cannot_initialize_pda_twice() {
     // Action: First initialization
     let payload_merkle_root = random_bytes();
     let gateway_config_pda = get_gateway_root_config_pda().0;
+    let signing_verifier_set_hash = metadata.init_gateway_config_verifier_set_data().hash;
 
     let ix = axelar_solana_gateway::instructions::initialize_payload_verification_session(
         metadata.payer.pubkey(),
         gateway_config_pda,
         payload_merkle_root,
+        signing_verifier_set_hash,
     )
     .unwrap();
     let _tx_result = metadata.send_tx(&[ix]).await.unwrap();
@@ -84,6 +90,7 @@ async fn test_cannot_initialize_pda_twice() {
         metadata.payer.pubkey(),
         gateway_config_pda,
         payload_merkle_root,
+        signing_verifier_set_hash,
     )
     .unwrap();
     let tx_result_second = metadata.send_tx(&[ix_second]).await.unwrap_err();
@@ -117,6 +124,7 @@ async fn test_same_payload_can_be_signed_by_multiple_verifier_sets_and_be_initia
             metadata.payer.pubkey(),
             metadata.gateway_root_pda,
             execute_data.payload_merkle_root,
+            execute_data.signing_verifier_set_merkle_root,
         )
         .unwrap();
         let _tx_result = metadata.send_tx(&[ix]).await.unwrap();

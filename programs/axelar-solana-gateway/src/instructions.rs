@@ -86,6 +86,8 @@ pub enum GatewayInstruction {
     InitializePayloadVerificationSession {
         /// The Merkle root for the Payload being verified.
         payload_merkle_root: [u8; 32],
+        /// The hash of the verifier set that signed the payload.
+        signing_verifier_set_hash: [u8; 32],
     },
 
     /// Verifies a signature within a Payload verification session
@@ -394,6 +396,7 @@ pub fn initialize_payload_verification_session(
     payer: Pubkey,
     gateway_config_pda: Pubkey,
     payload_merkle_root: [u8; 32],
+    signing_verifier_set_hash: [u8; 32],
 ) -> Result<Instruction, ProgramError> {
     let (verification_session_pda, _) = crate::get_signature_verification_pda(&payload_merkle_root);
 
@@ -406,6 +409,7 @@ pub fn initialize_payload_verification_session(
 
     let data = to_vec(&GatewayInstruction::InitializePayloadVerificationSession {
         payload_merkle_root,
+        signing_verifier_set_hash,
     })?;
 
     Ok(Instruction {

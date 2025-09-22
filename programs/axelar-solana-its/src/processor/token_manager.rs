@@ -507,7 +507,8 @@ pub(crate) fn process_add_flow_limiter<'a>(accounts: &'a [AccountInfo<'a>]) -> P
     let its_config_pda = next_account_info(accounts_iter)?;
     let system_account = next_account_info(accounts_iter)?;
     let payer = next_account_info(accounts_iter)?;
-    let payer_roles_account = next_account_info(accounts_iter)?;
+    let adder_user_account = next_account_info(accounts_iter)?;
+    let adder_roles_account = next_account_info(accounts_iter)?;
     let resource = next_account_info(accounts_iter)?;
     let destination_user_account = next_account_info(accounts_iter)?;
     let destination_roles_account = next_account_info(accounts_iter)?;
@@ -531,10 +532,11 @@ pub(crate) fn process_add_flow_limiter<'a>(accounts: &'a [AccountInfo<'a>]) -> P
     let role_management_accounts = RoleAddAccounts {
         system_account,
         payer,
-        payer_roles_account,
+        authority_user_account: adder_user_account,
+        authority_roles_account: adder_roles_account,
         resource,
-        destination_user_account,
-        destination_roles_account,
+        target_user_account: destination_user_account,
+        target_roles_account: destination_roles_account,
     };
 
     role_management::processor::add(
@@ -552,7 +554,8 @@ pub(crate) fn process_remove_flow_limiter<'a>(accounts: &'a [AccountInfo<'a>]) -
     let its_config_pda = next_account_info(accounts_iter)?;
     let system_account = next_account_info(accounts_iter)?;
     let payer = next_account_info(accounts_iter)?;
-    let payer_roles_account = next_account_info(accounts_iter)?;
+    let remover_user_account = next_account_info(accounts_iter)?;
+    let remover_roles_account = next_account_info(accounts_iter)?;
     let resource = next_account_info(accounts_iter)?;
     let origin_user_account = next_account_info(accounts_iter)?;
     let origin_roles_account = next_account_info(accounts_iter)?;
@@ -576,10 +579,11 @@ pub(crate) fn process_remove_flow_limiter<'a>(accounts: &'a [AccountInfo<'a>]) -
     let role_management_accounts = RoleRemoveAccounts {
         system_account,
         payer,
-        payer_roles_account,
+        authority_user_account: remover_user_account,
+        authority_roles_account: remover_roles_account,
         resource,
-        origin_user_account,
-        origin_roles_account,
+        target_user_account: origin_user_account,
+        target_roles_account: origin_roles_account,
     };
 
     role_management::processor::remove(
@@ -611,7 +615,8 @@ pub(crate) fn process_transfer_operatorship<'a>(accounts: &'a [AccountInfo<'a>])
     let its_config_pda = next_account_info(accounts_iter)?;
     let system_account = next_account_info(accounts_iter)?;
     let payer = next_account_info(accounts_iter)?;
-    let payer_roles_account = next_account_info(accounts_iter)?;
+    let origin_user_account = next_account_info(accounts_iter)?;
+    let origin_roles_account = next_account_info(accounts_iter)?;
     let token_manager_account = next_account_info(accounts_iter)?;
     let destination_user_account = next_account_info(accounts_iter)?;
     let destination_roles_account = next_account_info(accounts_iter)?;
@@ -637,18 +642,20 @@ pub(crate) fn process_transfer_operatorship<'a>(accounts: &'a [AccountInfo<'a>])
     let role_add_accounts = RoleAddAccounts {
         system_account,
         payer,
-        payer_roles_account,
+        authority_user_account: origin_user_account,
+        authority_roles_account: origin_roles_account,
         resource: token_manager_account,
-        destination_user_account,
-        destination_roles_account,
+        target_user_account: destination_user_account,
+        target_roles_account: destination_roles_account,
     };
     let role_remove_accounts = RoleRemoveAccounts {
         system_account,
         payer,
-        payer_roles_account,
+        authority_user_account: origin_user_account,
+        authority_roles_account: origin_roles_account,
         resource: token_manager_account,
-        origin_user_account: payer,
-        origin_roles_account: payer_roles_account,
+        target_user_account: origin_user_account,
+        target_roles_account: origin_roles_account,
     };
 
     role_management::processor::add(
@@ -673,7 +680,8 @@ pub(crate) fn process_propose_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) 
     let its_config_pda = next_account_info(accounts_iter)?;
     let system_account = next_account_info(accounts_iter)?;
     let payer = next_account_info(accounts_iter)?;
-    let payer_roles_account = next_account_info(accounts_iter)?;
+    let origin_user_account = next_account_info(accounts_iter)?;
+    let origin_roles_account = next_account_info(accounts_iter)?;
     let token_manager_account = next_account_info(accounts_iter)?;
     let destination_user_account = next_account_info(accounts_iter)?;
     let destination_roles_account = next_account_info(accounts_iter)?;
@@ -684,12 +692,11 @@ pub(crate) fn process_propose_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) 
     let role_management_accounts = RoleTransferWithProposalAccounts {
         system_account,
         payer,
-        payer_roles_account,
         resource: token_manager_account,
         destination_user_account,
         destination_roles_account,
-        origin_user_account: payer,
-        origin_roles_account: payer_roles_account,
+        origin_user_account,
+        origin_roles_account,
         proposal_account,
     };
 
@@ -713,7 +720,8 @@ pub(crate) fn process_accept_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -
     let its_config_pda = next_account_info(accounts_iter)?;
     let system_account = next_account_info(accounts_iter)?;
     let payer = next_account_info(accounts_iter)?;
-    let payer_roles_account = next_account_info(accounts_iter)?;
+    let destination_user_account = next_account_info(accounts_iter)?;
+    let destination_roles_account = next_account_info(accounts_iter)?;
     let token_manager_account = next_account_info(accounts_iter)?;
     let origin_user_account = next_account_info(accounts_iter)?;
     let origin_roles_account = next_account_info(accounts_iter)?;
@@ -729,10 +737,9 @@ pub(crate) fn process_accept_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -
     let role_management_accounts = RoleTransferWithProposalAccounts {
         system_account,
         payer,
-        payer_roles_account,
         resource: token_manager_account,
-        destination_user_account: payer,
-        destination_roles_account: payer_roles_account,
+        destination_user_account,
+        destination_roles_account,
         origin_user_account,
         origin_roles_account,
         proposal_account,

@@ -56,10 +56,7 @@ async fn test_initialize_payload_verification_session() {
     assert_eq!(session.bump, bump);
     let mut expected_verification = SignatureVerification::zeroed();
     expected_verification.signing_verifier_set_hash = signing_verifier_set_hash;
-    assert_eq!(
-        session.signature_verification,
-        expected_verification
-    );
+    assert_eq!(session.signature_verification, expected_verification);
 }
 
 #[tokio::test]

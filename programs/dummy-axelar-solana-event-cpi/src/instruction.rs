@@ -16,7 +16,7 @@ pub enum AxelarEventCpiInstruction {
     ///
     /// 0. [s] payer
     EmitEvent {
-        /// The pda bump for the counter PDA
+        /// The memo string to be emitted with the event
         memo: String,
     },
 }

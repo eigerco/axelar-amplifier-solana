@@ -290,6 +290,7 @@ impl ItsTestContext {
         let salt = solana_sdk::keccak::hash(b"TestTokenSalt").0;
         let deploy_local_ix = axelar_solana_its::instruction::deploy_interchain_token(
             self.solana_wallet,
+            self.solana_wallet,
             salt,
             "Test Token".to_owned(),
             "TT".to_owned(),

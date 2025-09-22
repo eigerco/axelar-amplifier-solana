@@ -869,7 +869,6 @@ name = "axelar-solana-its"
 version = "0.1.0"
 dependencies = [
  "alloy-primitives",
- "alloy-sol-types",
  "anyhow",
  "axelar-message-primitives",
  "axelar-solana-encoding",
@@ -2842,9 +2841,6 @@ dependencies = [
  "bs58",
  "serde",
  "sha2 0.10.9",
- "solana-program",
- "solana-program-test",
- "solana-sdk",
  "thiserror 1.0.69",
 ]
 

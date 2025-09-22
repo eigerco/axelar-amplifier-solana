@@ -2247,6 +2247,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "borsh 1.5.7",
+ "bs58",
  "event-cpi",
  "event-cpi-macros",
  "hex",
@@ -2258,6 +2259,7 @@ dependencies = [
  "solana-program",
  "solana-program-test",
  "solana-sdk",
+ "solana-transaction-status",
  "thiserror 1.0.69",
 ]
 

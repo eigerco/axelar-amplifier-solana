@@ -1,5 +1,6 @@
 use anyhow::Result;
-use dummy_axelar_solana_event_cpi::instruction::emit_event;
+use dummy_axelar_solana_event_cpi::{instruction::emit_event, processor::MemoSentEvent};
+use event_cpi::Discriminator;
 use solana_cli_config::{Config, CONFIG_FILE};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
@@ -9,8 +10,20 @@ use solana_sdk::{
     signer::EncodableKey,
     transaction::Transaction,
 };
+use solana_transaction_status::{UiCompiledInstruction, UiInstruction};
 use std::path::Path;
+use std::{thread, time::Duration};
 
+/// This example demonstrates how to emit an event using the dummy_axelar_solana_event_cpi program.
+/// The event emitted is MemoSentEvent, which contains the sender's public key and a memo.
+/// To run this example, first deploy the dummy_axelar_solana_event_cpi program to your local solana-test-validator.
+/// Then run this example with a memo message as an argument.
+//
+// Example:
+// solana-test-validator
+// cargo build-sbf
+// solana program deploy ../../target/deploy/dummy_axelar_solana_event_cpi.so
+// cargo run --example emit_memo "Hello devnet"
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 2 {
@@ -45,7 +58,7 @@ fn main() -> Result<()> {
     println!("Memo: {}", memo);
 
     // Create the basic instruction
-    let mut instruction = emit_event(&payer.pubkey(), memo)?;
+    let mut instruction = emit_event(&payer.pubkey(), memo.clone())?;
 
     // Add required accounts for event CPI functionality
     use dummy_axelar_solana_event_cpi::ID as PROGRAM_ID;
@@ -79,6 +92,70 @@ fn main() -> Result<()> {
 
     let signature = client.send_and_confirm_transaction(&transaction)?;
     println!("Transaction signature: {}", signature);
+
+    println!("Attempting to retrieve transaction details...");
+
+    let mut inner_ix: Option<UiCompiledInstruction> = None;
+
+    for _attempt in 1..=5 {
+        thread::sleep(Duration::from_secs(8));
+
+        use solana_transaction_status::UiTransactionEncoding;
+        match client.get_transaction(&signature, UiTransactionEncoding::Json) {
+            Ok(result) => {
+                println!("Transaction details retrieved.");
+                let ix = match result
+                    .transaction
+                    .meta
+                    .unwrap()
+                    .inner_instructions
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .instructions
+                    .first()
+                    .unwrap()
+                {
+                    UiInstruction::Parsed(_) => {
+                        panic!("Expected Compiled instruction, got Parsed");
+                    }
+                    UiInstruction::Compiled(ix) => ix.clone(),
+                };
+
+                inner_ix = Some(ix);
+
+                break;
+            }
+            Err(_e) => {
+                continue;
+            }
+        }
+    }
+
+    let data = match inner_ix {
+        Some(ref ix) => &ix.data,
+        None => {
+            eprintln!("Failed to retrieve transaction details after multiple attempts.");
+            std::process::exit(1);
+        }
+    };
+
+    let data = bs58::decode(data).into_vec().unwrap();
+
+    assert_eq!(&data[..8], event_cpi::EVENT_IX_TAG_LE);
+    assert_eq!(&data[8..16], MemoSentEvent::DISCRIMINATOR);
+    let event =
+        borsh::from_slice::<MemoSentEvent>(&data[16..]).expect("Failed to deserialize event data");
+
+    println!("Decoded event: {:?}", event);
+    assert_eq!(
+        event,
+        MemoSentEvent {
+            sender: payer.pubkey(),
+            memo: memo,
+        }
+    );
+    println!("Event matches expected values.");
 
     Ok(())
 }

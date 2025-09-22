@@ -25,9 +25,9 @@ pub struct MemoSentEvent {
 }
 
 /// Instruction processor
-pub fn process_instruction<'a>(
+pub fn process_instruction(
     program_id: &Pubkey,
-    accounts: &[AccountInfo<'a>],
+    accounts: &[AccountInfo<'_>],
     input: &[u8],
 ) -> ProgramResult {
     check_program_account(program_id, crate::check_id)?;

@@ -2853,6 +2853,7 @@ dependencies = [
  "borsh 1.5.7",
  "event-cpi",
  "proc-macro2",
+ "program-utils",
  "quote",
  "solana-program",
  "solana-program-test",

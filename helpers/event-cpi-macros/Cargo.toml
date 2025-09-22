@@ -20,3 +20,4 @@ borsh.workspace = true
 solana-program.workspace = true
 solana-sdk.workspace = true
 solana-program-test.workspace = true
+program-utils.workspace = true

@@ -181,7 +181,6 @@ pub fn emit_cpi(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         // 3. invoke_signed the instruction
         solana_program::program::invoke_signed(
             &__event_cpi_ix,
-            // TODO check if this needs to be cloned
             &[__event_cpi_authority_info.clone()],
             &[&[event_cpi::EVENT_AUTHORITY_SEED, &[__event_cpi_authority_bump]]],
         )?;

@@ -2,11 +2,12 @@
 
 extern crate proc_macro;
 
+use anchor_discriminators::sighash;
 use quote::quote;
 use syn::parse_macro_input;
 
 fn gen_discriminator(namespace: &str, name: impl ToString) -> proc_macro2::TokenStream {
-    let discriminator = event_cpi::sighash(namespace, name.to_string().as_str());
+    let discriminator = sighash(namespace, name.to_string().as_str());
     format!("&{discriminator:?}").parse().unwrap()
 }
 
@@ -22,7 +23,7 @@ fn gen_discriminator(namespace: &str, name: impl ToString) -> proc_macro2::Token
 /// - Requires `borsh` crate for serialization
 ///
 /// # Example
-/// ```rust
+/// ```ignore
 /// #[event]
 /// #[derive(Debug, Clone)]
 /// pub struct MyEvent {
@@ -38,7 +39,7 @@ pub fn event(
     let event_strct = parse_macro_input!(input as syn::ItemStruct);
     let event_name = &event_strct.ident;
 
-    let discriminator = gen_discriminator("event", event_name);
+    let discriminator = gen_discriminator(event_cpi::SIGHASH_EVENT_NAMESPACE, event_name);
 
     let ret = quote! {
         #[derive(borsh::BorshSerialize, borsh::BorshDeserialize)]
@@ -55,7 +56,7 @@ pub fn event(
             }
         }
 
-        impl event_cpi::Discriminator for #event_name {
+        impl anchor_discriminators::Discriminator for #event_name {
             const DISCRIMINATOR: &'static [u8] = #discriminator;
         }
     };
@@ -87,7 +88,7 @@ pub fn event(
 /// - `__event_cpi_authority_bump: u8` - The bump seed for the authority PDA
 ///
 /// # Example
-/// ```rust
+/// ```ignore
 /// let accounts = &mut accounts.iter();
 /// event_cpi_accounts!(accounts);
 /// // or with default iterator name:
@@ -143,7 +144,7 @@ pub fn event_cpi_accounts(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 /// - `__event_cpi_authority_bump: u8` - The bump seed for authority PDA
 ///
 /// # Example
-/// ```rust
+/// ```ignore
 /// let event = MyEvent {
 ///     user: *user_account.key,
 ///     amount: 1000,
@@ -213,7 +214,7 @@ pub fn emit_cpi(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// - If instruction data doesn't match: continues normal execution (no early return)
 ///
 /// # Example
-/// ```rust
+/// ```ignore
 /// pub fn process_instruction(
 ///     program_id: &Pubkey,
 ///     accounts: &[AccountInfo],

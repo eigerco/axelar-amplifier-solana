@@ -131,13 +131,35 @@ pub fn derive_instruction_discriminator(input: proc_macro::TokenStream) -> proc_
             }
 
             // We don't support unnamed fields (tuples)
-            syn::Fields::Unnamed(_) => {
-                return syn::Error::new_spanned(
-                    variant,
-                    "InstructionDiscriminator doesn't support unnamed fields. Use named fields instead."
-                )
-                .to_compile_error()
-                .into();
+            syn::Fields::Unnamed(fields) => {
+                if fields.unnamed.len() != 1 {
+                    return syn::Error::new_spanned(
+                        variant,
+                        "InstructionDiscriminator only supports a single unnamed field.",
+                    )
+                    .to_compile_error()
+                    .into();
+                }
+
+                discriminator_match_arms.push(quote! {
+                    #[doc = concat!("Discriminator for ", stringify!(#variant_name))]
+                    #[doc = concat!("sha256(global::", #variant_name_snake, ")[..8]")]
+                    Self::#variant_name(..) => &discriminators::#const_name
+                });
+
+                serialize_match_arms.push(quote! {
+                    Self::#variant_name(data) => {
+                        writer.write_all(&discriminators::#const_name)?;
+                        data.serialize(writer)?;
+                    }
+                });
+
+                deserialize_match_arms.push(quote! {
+                    discriminators::#const_name => {
+                        let data = borsh::BorshDeserialize::deserialize_reader(reader)?;
+                        Ok(Self::#variant_name(data))
+                    }
+                });
             }
         }
     }

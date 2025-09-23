@@ -1758,8 +1758,12 @@ pub fn execute(inputs: ExecuteInstructionInputs) -> Result<Instruction, ProgramE
             .map_err(|_err| ProgramError::InvalidInstructionData)?,
     };
 
-    let mut its_accounts =
-        derive_its_accounts(&unwrapped_payload, inputs.token_program, inputs.mint, inputs.payer)?;
+    let mut its_accounts = derive_its_accounts(
+        &unwrapped_payload,
+        inputs.token_program,
+        inputs.mint,
+        inputs.payer,
+    )?;
 
     accounts.append(&mut its_accounts);
 
@@ -1931,12 +1935,12 @@ where
     let (mut common_accounts, mint, token_manager_pda) =
         derive_common_its_accounts(token_program, &message, maybe_mint)?;
     let mut accounts = Vec::new();
-    
+
     // For DeployInterchainToken, add deployer account before common accounts
     if let ItsMessageRef::DeployInterchainToken { .. } = message {
         accounts.push(AccountMeta::new_readonly(payer, false));
     }
-    
+
     accounts.append(&mut common_accounts);
 
     let mut message_specific_accounts =

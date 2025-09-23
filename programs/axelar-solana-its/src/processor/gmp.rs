@@ -56,7 +56,7 @@ pub(crate) fn process_execute<'a>(
     let has_deployer = matches!(payload, GMPPayload::DeployInterchainToken { .. });
 
     // Parse remaining accounts based on whether deployer is present
-    // Note: accounts_iter is already past the gateway accounts (payer, gateway_incoming_message_pda, 
+    // Note: accounts_iter is already past the gateway accounts (payer, gateway_incoming_message_pda,
     // payload_account, signing_pda, gateway_program_id), now we parse the ITS accounts
     let (system_program, its_root_pda_account) = if has_deployer {
         let _deployer = next_account_info(accounts_iter)?; // Skip deployer account (first ITS account)
@@ -275,10 +275,14 @@ fn pay_gas<'a>(
     )
 }
 
-fn validate_its_accounts(accounts: &[AccountInfo<'_>], payload: &GMPPayload, payer: &AccountInfo<'_>) -> ProgramResult {
+fn validate_its_accounts(
+    accounts: &[AccountInfo<'_>],
+    payload: &GMPPayload,
+    payer: &AccountInfo<'_>,
+) -> ProgramResult {
     // Check if this is a DeployInterchainToken operation to determine account structure
     let has_deployer = matches!(payload, GMPPayload::DeployInterchainToken { .. });
-    
+
     // Account indices depend on whether deployer account is present
     let (token_manager_pda_index, token_mint_index, token_program_index) = if has_deployer {
         (3, 4, 6) // Shifted by +1 due to deployer account

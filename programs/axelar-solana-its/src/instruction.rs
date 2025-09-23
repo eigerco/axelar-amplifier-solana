@@ -1940,7 +1940,7 @@ where
     accounts.append(&mut common_accounts);
 
     let mut message_specific_accounts =
-        derive_specific_its_accounts(&message, mint, token_manager_pda, token_program, payer)?;
+        derive_specific_its_accounts(&message, mint, token_manager_pda, token_program)?;
 
     accounts.append(&mut message_specific_accounts);
 
@@ -1952,7 +1952,6 @@ fn derive_specific_its_accounts(
     mint_account: Pubkey,
     token_manager_pda: Pubkey,
     token_program: Pubkey,
-    _payer: Pubkey,
 ) -> Result<Vec<AccountMeta>, ProgramError> {
     let mut specific_accounts = Vec::new();
 
@@ -2190,9 +2189,8 @@ mod tests {
         let token_program = spl_token_2022::ID;
 
         // This should fail with InvalidInstructionData because minter is not empty but also not 32 bytes
-        let payer = Pubkey::new_unique();
         let result =
-            derive_specific_its_accounts(&message, mint_account, token_manager_pda, token_program, payer);
+            derive_specific_its_accounts(&message, mint_account, token_manager_pda, token_program);
 
         assert_eq!(result.unwrap_err(), ProgramError::InvalidInstructionData);
     }
@@ -2220,9 +2218,8 @@ mod tests {
         let token_program = spl_token_2022::ID;
 
         // This should succeed because empty minter is allowed
-        let payer = Pubkey::new_unique();
         let result =
-            derive_specific_its_accounts(&message, mint_account, token_manager_pda, token_program, payer);
+            derive_specific_its_accounts(&message, mint_account, token_manager_pda, token_program);
 
         assert!(result.is_ok());
         let accounts = result.unwrap();
@@ -2256,9 +2253,8 @@ mod tests {
         let token_program = spl_token_2022::ID;
 
         // This should succeed because minter is exactly 32 bytes
-        let payer = Pubkey::new_unique();
         let result =
-            derive_specific_its_accounts(&message, mint_account, token_manager_pda, token_program, payer);
+            derive_specific_its_accounts(&message, mint_account, token_manager_pda, token_program);
 
         assert!(result.is_ok());
         let accounts = result.unwrap();

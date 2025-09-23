@@ -1759,7 +1759,7 @@ pub fn execute(inputs: ExecuteInstructionInputs) -> Result<Instruction, ProgramE
     };
 
     let mut its_accounts =
-        derive_its_accounts(&unwrapped_payload, inputs.token_program, inputs.mint)?;
+        derive_its_accounts(&unwrapped_payload, inputs.token_program, inputs.mint, inputs.payer)?;
 
     accounts.append(&mut its_accounts);
 
@@ -1914,6 +1914,7 @@ pub(crate) fn derive_its_accounts<'a, T>(
     payload: T,
     token_program: Pubkey,
     maybe_mint: Option<Pubkey>,
+    payer: Pubkey,
 ) -> Result<Vec<AccountMeta>, ProgramError>
 where
     T: TryInto<ItsMessageRef<'a>>,
@@ -1927,11 +1928,19 @@ where
         }
     }
 
-    let (mut accounts, mint, token_manager_pda) =
+    let (mut common_accounts, mint, token_manager_pda) =
         derive_common_its_accounts(token_program, &message, maybe_mint)?;
+    let mut accounts = Vec::new();
+    
+    // For DeployInterchainToken, add deployer account before common accounts
+    if let ItsMessageRef::DeployInterchainToken { .. } = message {
+        accounts.push(AccountMeta::new_readonly(payer, false));
+    }
+    
+    accounts.append(&mut common_accounts);
 
     let mut message_specific_accounts =
-        derive_specific_its_accounts(&message, mint, token_manager_pda, token_program)?;
+        derive_specific_its_accounts(&message, mint, token_manager_pda, token_program, payer)?;
 
     accounts.append(&mut message_specific_accounts);
 
@@ -1943,6 +1952,7 @@ fn derive_specific_its_accounts(
     mint_account: Pubkey,
     token_manager_pda: Pubkey,
     token_program: Pubkey,
+    _payer: Pubkey,
 ) -> Result<Vec<AccountMeta>, ProgramError> {
     let mut specific_accounts = Vec::new();
 
@@ -2180,8 +2190,9 @@ mod tests {
         let token_program = spl_token_2022::ID;
 
         // This should fail with InvalidInstructionData because minter is not empty but also not 32 bytes
+        let payer = Pubkey::new_unique();
         let result =
-            derive_specific_its_accounts(&message, mint_account, token_manager_pda, token_program);
+            derive_specific_its_accounts(&message, mint_account, token_manager_pda, token_program, payer);
 
         assert_eq!(result.unwrap_err(), ProgramError::InvalidInstructionData);
     }
@@ -2209,8 +2220,9 @@ mod tests {
         let token_program = spl_token_2022::ID;
 
         // This should succeed because empty minter is allowed
+        let payer = Pubkey::new_unique();
         let result =
-            derive_specific_its_accounts(&message, mint_account, token_manager_pda, token_program);
+            derive_specific_its_accounts(&message, mint_account, token_manager_pda, token_program, payer);
 
         assert!(result.is_ok());
         let accounts = result.unwrap();
@@ -2244,8 +2256,9 @@ mod tests {
         let token_program = spl_token_2022::ID;
 
         // This should succeed because minter is exactly 32 bytes
+        let payer = Pubkey::new_unique();
         let result =
-            derive_specific_its_accounts(&message, mint_account, token_manager_pda, token_program);
+            derive_specific_its_accounts(&message, mint_account, token_manager_pda, token_program, payer);
 
         assert!(result.is_ok());
         let accounts = result.unwrap();

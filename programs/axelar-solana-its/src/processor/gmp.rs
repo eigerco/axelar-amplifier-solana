@@ -37,8 +37,37 @@ pub(crate) fn process_execute<'a>(
     let payload_account = next_account_info(accounts_iter)?;
     let _signing_pda = next_account_info(accounts_iter)?;
     let _gateway_program_id = next_account_info(accounts_iter)?;
-    let system_program = next_account_info(accounts_iter)?;
-    let its_root_pda_account = next_account_info(accounts_iter)?;
+
+    // Decode payload early to determine if we need deployer account
+    let payload_account_data = payload_account.try_borrow_data()?;
+    let message_payload: ImmutMessagePayload<'_> = (**payload_account_data).try_into()?;
+
+    let GMPPayload::ReceiveFromHub(inner) = GMPPayload::decode(message_payload.raw_payload)
+        .map_err(|_err| ProgramError::InvalidInstructionData)?
+    else {
+        msg!("Unsupported GMP payload");
+        return Err(ProgramError::InvalidInstructionData);
+    };
+
+    let payload =
+        GMPPayload::decode(&inner.payload).map_err(|_err| ProgramError::InvalidInstructionData)?;
+
+    // Check if this is a DeployInterchainToken operation to determine account structure
+    let has_deployer = matches!(payload, GMPPayload::DeployInterchainToken { .. });
+
+    // Parse remaining accounts based on whether deployer is present
+    // Note: accounts_iter is already past the gateway accounts (payer, gateway_incoming_message_pda, 
+    // payload_account, signing_pda, gateway_program_id), now we parse the ITS accounts
+    let (system_program, its_root_pda_account) = if has_deployer {
+        let _deployer = next_account_info(accounts_iter)?; // Skip deployer account (first ITS account)
+        let system_program = next_account_info(accounts_iter)?; // Second ITS account
+        let its_root_pda_account = next_account_info(accounts_iter)?; // Third ITS account
+        (system_program, its_root_pda_account)
+    } else {
+        let system_program = next_account_info(accounts_iter)?; // First ITS account
+        let its_root_pda_account = next_account_info(accounts_iter)?; // Second ITS account
+        (system_program, its_root_pda_account)
+    };
 
     validate_system_account_key(system_program.key)?;
 
@@ -51,25 +80,12 @@ pub(crate) fn process_execute<'a>(
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    let payload_account_data = payload_account.try_borrow_data()?;
-    let message_payload: ImmutMessagePayload<'_> = (**payload_account_data).try_into()?;
-
-    let GMPPayload::ReceiveFromHub(inner) = GMPPayload::decode(message_payload.raw_payload)
-        .map_err(|_err| ProgramError::InvalidInstructionData)?
-    else {
-        msg!("Unsupported GMP payload");
-        return Err(ProgramError::InvalidInstructionData);
-    };
-
     if !its_root_config.is_trusted_chain(&inner.source_chain) {
         msg!("Untrusted source chain: {}", inner.source_chain);
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    let payload =
-        GMPPayload::decode(&inner.payload).map_err(|_err| ProgramError::InvalidInstructionData)?;
-
-    validate_its_accounts(instruction_accounts, &payload)?;
+    validate_its_accounts(instruction_accounts, &payload, payer)?;
 
     match payload {
         GMPPayload::InterchainTransfer(transfer) => process_inbound_transfer(
@@ -259,7 +275,7 @@ fn pay_gas<'a>(
     )
 }
 
-fn validate_its_accounts(accounts: &[AccountInfo<'_>], payload: &GMPPayload) -> ProgramResult {
+fn validate_its_accounts(accounts: &[AccountInfo<'_>], payload: &GMPPayload, payer: &AccountInfo<'_>) -> ProgramResult {
     const TOKEN_MANAGER_PDA_INDEX: usize = 2;
     const TOKEN_MINT_INDEX: usize = 3;
     const TOKEN_PROGRAM_INDEX: usize = 5;
@@ -278,7 +294,7 @@ fn validate_its_accounts(accounts: &[AccountInfo<'_>], payload: &GMPPayload) -> 
         .ok_or(ProgramError::InvalidAccountData)?;
 
     let derived_its_accounts =
-        instruction::derive_its_accounts(payload, token_program, maybe_mint)?;
+        instruction::derive_its_accounts(payload, token_program, maybe_mint, *payer.key)?;
 
     for element in accounts.iter().zip_longest(derived_its_accounts.iter()) {
         match element {

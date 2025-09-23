@@ -55,6 +55,7 @@ pub enum InterchainTokenServiceInstruction {
         /// The new pause status.
         paused: bool,
     },
+
     /// Sets a chain as trusted, allowing communication between this ITS and the ITS of that chain.
     ///
     /// Accounts expected by this instruction:
@@ -429,7 +430,7 @@ pub enum InterchainTokenServiceInstruction {
     },
 
     /// Transfers tokens to a contract on the destination chain and call the give instruction on
-    /// it. This instruction is is the same as [`InterchainTransfer`], but will fail if call data
+    /// it. This instruction is the same as [`InterchainTransfer`], but will fail if call data
     /// is empty.
     ///
     /// 0. [writable,signer] The address of the sender
@@ -657,7 +658,7 @@ pub enum InterchainTokenServiceInstruction {
 
     /// Transfers the mint authority to the token manager allowing it to mint tokens and manage
     /// minters. The account transferring the authority gains minter role on the [`TokenManager`] and
-    /// thus can then mint tokens through the ITS mitn instruction.
+    /// thus can then mint tokens through the ITS mint instruction.
     ///
     /// 0. [writable, signer] Payer, current mint authority
     /// 1. [writable] The mint for which the authority is being handed over
@@ -769,7 +770,7 @@ pub struct ExecuteInstructionInputs {
     /// The PDA used to track the message status by the gateway program.
     pub(crate) incoming_message_pda: Pubkey,
 
-    /// The PDA used to to store the message payload.
+    /// The PDA used to store the message payload.
     pub(crate) message_payload_pda: Pubkey,
 
     /// The Axelar GMP metadata.

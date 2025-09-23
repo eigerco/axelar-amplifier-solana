@@ -276,20 +276,26 @@ fn pay_gas<'a>(
 }
 
 fn validate_its_accounts(accounts: &[AccountInfo<'_>], payload: &GMPPayload, payer: &AccountInfo<'_>) -> ProgramResult {
-    const TOKEN_MANAGER_PDA_INDEX: usize = 2;
-    const TOKEN_MINT_INDEX: usize = 3;
-    const TOKEN_PROGRAM_INDEX: usize = 5;
+    // Check if this is a DeployInterchainToken operation to determine account structure
+    let has_deployer = matches!(payload, GMPPayload::DeployInterchainToken { .. });
+    
+    // Account indices depend on whether deployer account is present
+    let (token_manager_pda_index, token_mint_index, token_program_index) = if has_deployer {
+        (3, 4, 6) // Shifted by +1 due to deployer account
+    } else {
+        (2, 3, 5) // Original indices
+    };
 
     // In this case we cannot derive the mint account, so we just use what we got
     // and check later against the mint within the `TokenManager` PDA.
     let maybe_mint = if let GMPPayload::InterchainTransfer(_) = payload {
-        accounts.get(TOKEN_MINT_INDEX).map(|account| *account.key)
+        accounts.get(token_mint_index).map(|account| *account.key)
     } else {
         None
     };
 
     let token_program = accounts
-        .get(TOKEN_PROGRAM_INDEX)
+        .get(token_program_index)
         .map(|account| *account.key)
         .ok_or(ProgramError::InvalidAccountData)?;
 
@@ -312,7 +318,7 @@ fn validate_its_accounts(accounts: &[AccountInfo<'_>], payload: &GMPPayload, pay
     // Now we validate the mint account passed for `InterchainTransfer`
     if let Some(mint) = maybe_mint {
         let token_manager_pda = accounts
-            .get(TOKEN_MANAGER_PDA_INDEX)
+            .get(token_manager_pda_index)
             .ok_or(ProgramError::InvalidAccountData)?;
 
         let token_manager = TokenManager::load(token_manager_pda)?;

@@ -22,7 +22,17 @@ pub struct ExecuteData {
     /// their signatures and Merkle proofs.
     pub signing_verifier_set_leaves: Vec<SigningVerifierSetInfo>,
 
-    /// The Merkle root of the payload data.
+    /// Dual-purpose field containing different hash types:
+    ///
+    /// - **For Message payloads**: Merkle root from a tree of message leaves.
+    ///
+    /// - **For VerifierSet payloads**: Constructed hash combining a static prefix (`b"new verifier
+    ///   set"`), the new verifier set Merkle root, and the signing verifier set Merkle root using
+    ///   `hashv()`. This is NOT a Merkle root after recent codebase changes.
+    ///
+    /// TODO: Rename field to `payload_hash` to accurately reflect its nature.  Previously this was
+    /// a Merkle root for both message and verifier set payloads, but verifier set handling was
+    /// changed to use composite instead.
     pub payload_merkle_root: [u8; 32],
 
     /// The payload items, which can either be new messages or a verifier set

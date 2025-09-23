@@ -32,7 +32,7 @@ pub struct ExecuteData {
     ///
     /// TODO: Rename field to `payload_hash` to accurately reflect its nature.  Previously this was
     /// a Merkle root for both message and verifier set payloads, but verifier set handling was
-    /// changed to use composite instead.
+    /// changed to use a composite hash instead.
     pub payload_merkle_root: [u8; 32],
 
     /// The payload items, which can either be new messages or a verifier set

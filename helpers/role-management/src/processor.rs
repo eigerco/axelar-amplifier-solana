@@ -232,7 +232,7 @@ pub fn remove<F: RolesFlags>(
         roles,
     )?;
 
-    if let Ok(mut authority_user_roles) = UserRoles::load(accounts.authority_roles_account) {
+    if let Ok(mut authority_user_roles) = UserRoles::load(accounts.target_roles_account) {
         authority_user_roles.remove(roles);
         authority_user_roles.store(
             accounts.payer,

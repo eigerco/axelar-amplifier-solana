@@ -821,7 +821,7 @@ pub(crate) fn process_transfer_mintership<'a>(accounts: &'a [AccountInfo<'a>]) -
 
     validate_system_account_key(system_account.key)?;
 
-    if payer.key == destination_user_account.key {
+    if transferer_user_account.key == destination_user_account.key {
         msg!("Source and destination accounts are the same");
         return Err(ProgramError::InvalidArgument);
     }

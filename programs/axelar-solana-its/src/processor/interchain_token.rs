@@ -104,15 +104,18 @@ impl<'a> FromAccountInfoSlice<'a> for DeployInterchainTokenAccounts<'a> {
         Self: Sized + Validate,
     {
         let accounts_iter = &mut accounts.iter();
-        let payer = if let Some(payer) = maybe_payer {
-            payer
+        let (payer, deployer) = if let Some(payer) = maybe_payer {
+            (*payer, *payer)
         } else {
-            next_account_info(accounts_iter)?
+            (
+                next_account_info(accounts_iter)?,
+                next_account_info(accounts_iter)?,
+            )
         };
 
         Ok(Self {
             payer,
-            deployer: next_account_info(accounts_iter)?,
+            deployer,
             system_account: next_account_info(accounts_iter)?,
             its_root_pda: next_account_info(accounts_iter)?,
             token_manager_pda: next_account_info(accounts_iter)?,
@@ -821,7 +824,7 @@ pub(crate) fn process_transfer_mintership<'a>(accounts: &'a [AccountInfo<'a>]) -
 
     validate_system_account_key(system_account.key)?;
 
-    if payer.key == destination_user_account.key {
+    if transferer_user_account.key == destination_user_account.key {
         msg!("Source and destination accounts are the same");
         return Err(ProgramError::InvalidArgument);
     }

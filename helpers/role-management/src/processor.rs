@@ -33,14 +33,6 @@ pub fn propose<F: RolesFlags>(
         roles,
     )?;
 
-    ensure_roles(
-        program_id,
-        accounts.resource,
-        accounts.origin_user_account,
-        accounts.origin_roles_account,
-        roles,
-    )?;
-
     ensure_proper_account::<F>(
         program_id,
         accounts.resource,

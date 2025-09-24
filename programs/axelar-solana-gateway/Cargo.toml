@@ -28,7 +28,7 @@ testnet = [
 ]
 mainnet = [
     "axelar-solana-gateway-test-fixtures/mainnet",
-    "program-utils/mainnet", 
+    "program-utils/mainnet",
 ]
 default = ["devnet-amplifier"]
 
@@ -51,6 +51,8 @@ role-management.workspace = true
 solana-program.workspace = true
 thiserror.workspace = true
 alloy-sol-types.workspace = true
+event-cpi.workspace = true
+event-cpi-macros.workspace = true
 
 [dev-dependencies]
 hex.workspace = true

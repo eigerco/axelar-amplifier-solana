@@ -1,4 +1,4 @@
-use anchor_discriminators::Discriminator;
+pub use anchor_discriminators::Discriminator;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 // https://github.com/solana-foundation/anchor/blob/18d0ca0ce9b78c03ef370406c6ba86e28e4591ab/lang/src/event.rs#L2

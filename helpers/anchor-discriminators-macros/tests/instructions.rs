@@ -51,10 +51,9 @@ fn test_serialization() {
         refund_address: Pubkey::new_unique(),
     };
     let add_gas_data = borsh::to_vec(&add_gas).unwrap();
-    #[allow(clippy::indexing_slicing)]
-    let add_gas_data = &add_gas_data[..8];
-    assert_eq!(add_gas_data, add_gas.discriminator());
 
-    let add_gas_deser = GasServiceInstruction::try_from_slice(add_gas_data).unwrap();
+    assert_eq!(&add_gas_data[..8], add_gas.discriminator());
+
+    let add_gas_deser = GasServiceInstruction::try_from_slice(&add_gas_data).unwrap();
     assert_eq!(add_gas, add_gas_deser);
 }

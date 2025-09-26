@@ -775,6 +775,7 @@ async fn test_set_trusted_chain_with_upgrade_authority(ctx: &mut ItsTestContext)
     .unwrap();
 
     let set_trusted_chain_ix = axelar_solana_its::instruction::set_trusted_chain(
+        ctx.solana_chain.fixture.payer.insecure_clone().pubkey(),
         ctx.solana_chain.upgrade_authority.pubkey(),
         chain_name.clone(),
     )
@@ -834,9 +835,12 @@ async fn test_set_trusted_chain_with_operator_role(ctx: &mut ItsTestContext) {
         .unwrap();
 
     // Bob sets trusted chain using operator role
-    let set_trusted_chain_ix =
-        axelar_solana_its::instruction::set_trusted_chain(bob.pubkey(), chain_name.clone())
-            .unwrap();
+    let set_trusted_chain_ix = axelar_solana_its::instruction::set_trusted_chain(
+        ctx.solana_chain.fixture.payer.insecure_clone().pubkey(),
+        bob.pubkey(),
+        chain_name.clone(),
+    )
+    .unwrap();
 
     ctx.solana_chain
         .fixture
@@ -880,9 +884,12 @@ async fn test_set_trusted_chain_failure_without_authority(ctx: &mut ItsTestConte
     .unwrap();
 
     // Charlie has neither upgrade authority nor operator role
-    let set_trusted_chain_ix =
-        axelar_solana_its::instruction::set_trusted_chain(charlie.pubkey(), chain_name.clone())
-            .unwrap();
+    let set_trusted_chain_ix = axelar_solana_its::instruction::set_trusted_chain(
+        ctx.solana_chain.fixture.payer.insecure_clone().pubkey(),
+        charlie.pubkey(),
+        chain_name.clone(),
+    )
+    .unwrap();
 
     let tx_metadata = ctx
         .solana_chain
@@ -932,6 +939,7 @@ async fn test_remove_trusted_chain_with_upgrade_authority(ctx: &mut ItsTestConte
 
     // First add the chain as trusted
     let set_trusted_chain_ix = axelar_solana_its::instruction::set_trusted_chain(
+        ctx.solana_chain.fixture.payer.insecure_clone().pubkey(),
         ctx.solana_chain.upgrade_authority.pubkey(),
         chain_name.clone(),
     )
@@ -963,6 +971,7 @@ async fn test_remove_trusted_chain_with_upgrade_authority(ctx: &mut ItsTestConte
 
     // Now remove the chain using upgrade authority
     let remove_trusted_chain_ix = axelar_solana_its::instruction::remove_trusted_chain(
+        ctx.solana_chain.fixture.payer.insecure_clone().pubkey(),
         ctx.solana_chain.upgrade_authority.pubkey(),
         chain_name.clone(),
     )
@@ -1017,6 +1026,7 @@ async fn test_remove_trusted_chain_with_operator_role(ctx: &mut ItsTestContext) 
 
     // First add the chain as trusted using upgrade authority
     let set_trusted_chain_ix = axelar_solana_its::instruction::set_trusted_chain(
+        ctx.solana_chain.fixture.payer.insecure_clone().pubkey(),
         ctx.solana_chain.upgrade_authority.pubkey(),
         chain_name.clone(),
     )
@@ -1047,9 +1057,12 @@ async fn test_remove_trusted_chain_with_operator_role(ctx: &mut ItsTestContext) 
         .unwrap();
 
     // Bob removes the chain using operator role
-    let remove_trusted_chain_ix =
-        axelar_solana_its::instruction::remove_trusted_chain(bob.pubkey(), chain_name.clone())
-            .unwrap();
+    let remove_trusted_chain_ix = axelar_solana_its::instruction::remove_trusted_chain(
+        ctx.solana_chain.fixture.payer.insecure_clone().pubkey(),
+        bob.pubkey(),
+        chain_name.clone(),
+    )
+    .unwrap();
 
     ctx.solana_chain
         .fixture
@@ -1101,6 +1114,7 @@ async fn test_remove_trusted_chain_failure_without_authority(ctx: &mut ItsTestCo
 
     // First add the chain as trusted using upgrade authority
     let set_trusted_chain_ix = axelar_solana_its::instruction::set_trusted_chain(
+        ctx.solana_chain.fixture.payer.insecure_clone().pubkey(),
         ctx.solana_chain.upgrade_authority.pubkey(),
         chain_name.clone(),
     )
@@ -1119,9 +1133,12 @@ async fn test_remove_trusted_chain_failure_without_authority(ctx: &mut ItsTestCo
         .unwrap();
 
     // Charlie has neither upgrade authority nor operator role
-    let remove_trusted_chain_ix =
-        axelar_solana_its::instruction::remove_trusted_chain(charlie.pubkey(), chain_name.clone())
-            .unwrap();
+    let remove_trusted_chain_ix = axelar_solana_its::instruction::remove_trusted_chain(
+        ctx.solana_chain.fixture.payer.insecure_clone().pubkey(),
+        charlie.pubkey(),
+        chain_name.clone(),
+    )
+    .unwrap();
 
     let tx_metadata = ctx
         .solana_chain
@@ -1698,6 +1715,7 @@ async fn test_fail_remove_non_existing_trusted_chain(ctx: &mut ItsTestContext) {
 
     // Attempt to remove a chain that was never added as trusted
     let remove_trusted_chain_ix = axelar_solana_its::instruction::remove_trusted_chain(
+        ctx.solana_chain.fixture.payer.insecure_clone().pubkey(),
         ctx.solana_chain.upgrade_authority.pubkey(),
         non_existing_chain.clone(),
     )

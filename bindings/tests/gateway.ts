@@ -133,7 +133,7 @@ describe("Ping Gateway", () => {
     const payer = await getKeypairFromFile();
     try {
       const tx = await program.methods
-        .initializePayloadVerificationSession([1, 2])
+        .initializePayloadVerificationSession([1, 2], [3, 4])
         .accounts({
           payer: payer.publicKey,
           gatewayConfigPda: payer.publicKey,

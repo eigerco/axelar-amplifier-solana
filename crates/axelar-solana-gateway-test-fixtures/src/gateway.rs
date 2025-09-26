@@ -131,6 +131,7 @@ impl SolanaAxelarIntegrationMetadata {
             self.payer.pubkey(),
             self.gateway_root_pda,
             execute_data.payload_merkle_root,
+            execute_data.signing_verifier_set_merkle_root,
         )
         .unwrap();
         self.fixture.send_tx(&[ix]).await

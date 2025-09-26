@@ -1,6 +1,6 @@
 // @ts-nocheck
 import * as B from "@native-to-anchor/buffer-layout";
-import { Idl, InstructionCoder } from "@project-serum/anchor";
+import { Idl, InstructionCoder } from "@coral-xyz/anchor";
 
 export class AxelarSolanaGatewayInstructionCoder implements InstructionCoder {
   constructor(_idl: Idl) {}
@@ -136,10 +136,16 @@ function encodeInitializeConfig({
 
 function encodeInitializePayloadVerificationSession({
   payloadMerkleRoot,
+  signingVerifierSetHash,
 }: any): Buffer {
   return encodeData(
-    { initializePayloadVerificationSession: { payloadMerkleRoot } },
-    1 + 1 * 32
+    {
+      initializePayloadVerificationSession: {
+        payloadMerkleRoot,
+        signingVerifierSetHash,
+      },
+    },
+    1 + 1 * 32 + 1 * 32
   );
 }
 
@@ -286,7 +292,10 @@ LAYOUT.addVariant(
 );
 LAYOUT.addVariant(
   4,
-  B.struct([B.seq(B.u8(), 32, "payloadMerkleRoot")]),
+  B.struct([
+    B.seq(B.u8(), 32, "payloadMerkleRoot"),
+    B.seq(B.u8(), 32, "signingVerifierSetHash"),
+  ]),
   "initializePayloadVerificationSession"
 );
 LAYOUT.addVariant(

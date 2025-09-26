@@ -40,6 +40,7 @@ impl Processor {
         program_id: &Pubkey,
         accounts: &[AccountInfo<'_>],
         merkle_root: [u8; 32],
+        signing_verifier_set_hash: [u8; 32],
     ) -> ProgramResult {
         // Accounts
         let accounts_iter = &mut accounts.iter();
@@ -119,6 +120,7 @@ impl Processor {
         let session = SignatureVerificationSessionData::read_mut(&mut data)
             .ok_or(GatewayError::BytemuckDataLenInvalid)?;
         session.bump = bump;
+        session.signature_verification.signing_verifier_set_hash = signing_verifier_set_hash;
 
         Ok(())
     }

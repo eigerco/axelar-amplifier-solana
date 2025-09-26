@@ -48,7 +48,7 @@ pub enum InterchainTokenServiceInstruction {
     ///
     /// 0. [signer] The address of the upgrade authority (ITS owner).
     /// 1. [] The program data account.
-    /// 2. [writable] ITS root pda.
+    /// 2. [writable] ITS root PDA.
     /// 3. [] System program account
     SetPauseStatus {
         /// The new pause status.
@@ -63,7 +63,7 @@ pub enum InterchainTokenServiceInstruction {
     /// 1. [signer] The address of the authority: either ITS operator or upgrade authority (owner).
     /// 2. [] The account that holds the authority roles on the ITS root account.
     /// 3. [] The program data account.
-    /// 4. [writable] ITS root pda.
+    /// 4. [writable] ITS root PDA.
     /// 5. [] The system program account.
     SetTrustedChain {
         /// The name of the chain to be trusted.
@@ -78,7 +78,7 @@ pub enum InterchainTokenServiceInstruction {
     /// 1. [signer] The address of the authority: either ITS operator or upgrade authority (owner).
     /// 2. [] The account that holds the authority roles on the ITS root account.
     /// 3. [] The program data account.
-    /// 4. [writable] ITS root pda.
+    /// 4. [writable] ITS root PDA.
     /// 5. [] The system program account.
     RemoveTrustedChain {
         /// The name of the chain from which trust is removed.
@@ -418,7 +418,7 @@ pub enum InterchainTokenServiceInstruction {
         signing_pda_bump: u8,
     },
 
-    /// Transfers tokens to a contract on the destination chain and call the give instruction on
+    /// Transfers tokens to a contract on the destination chain and call the given instruction on
     /// it. This instruction is the same as [`InterchainTransfer`], but will fail if call data
     /// is empty.
     ///
@@ -717,8 +717,8 @@ pub enum InterchainTokenServiceInstruction {
     /// A GMP Interchain Token Service instruction.
     ///
     /// 0. [writable,signer] The address of payer / sender
-    /// 1. [] gateway root pda
-    /// 2. [] ITS root pda
+    /// 1. [] gateway root PDA
+    /// 2. [] ITS root PDA
     ///
     /// 3..N Accounts depend on the inner ITS instruction.
     Execute {

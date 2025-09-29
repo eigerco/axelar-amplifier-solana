@@ -1,10 +1,6 @@
-use axelar_solana_encoding::types::messages::Messages;
-use axelar_solana_encoding::types::payload::Payload;
 use axelar_solana_gateway::get_gateway_root_config_pda;
 use axelar_solana_gateway::state::signature_verification::SignatureVerification;
-use axelar_solana_gateway_test_fixtures::gateway::{
-    make_messages, make_verifier_set, random_bytes,
-};
+use axelar_solana_gateway_test_fixtures::gateway::random_bytes;
 use axelar_solana_gateway_test_fixtures::SolanaAxelarIntegration;
 use bytemuck::Zeroable;
 use solana_program_test::tokio;
@@ -99,76 +95,49 @@ async fn test_cannot_initialize_pda_twice() {
     );
 }
 
+/// This test verifies that initialize_payload_verification_session properly validates
+/// the signing_verifier_set_hash parameter.
 #[tokio::test]
-async fn test_different_verifier_sets_produce_different_verification_session_pdas() {
-    // Arrange: Set up test environment with two distinct verifier sets
+async fn test_rejects_invalid_verifier_set_hash() {
     let mut metadata = SolanaAxelarIntegration::builder()
         .initial_signer_weights(vec![42])
         .build()
         .setup()
         .await;
 
-    // Create two different verifier sets with distinct weights and epochs
-    let verifier_set_a = make_verifier_set(&[500, 200], 1, metadata.domain_separator);
-    let verifier_set_b = make_verifier_set(&[500, 23], 101, metadata.domain_separator);
+    let invalid_ix = axelar_solana_gateway::instructions::initialize_payload_verification_session(
+        metadata.payer.pubkey(),
+        metadata.gateway_root_pda,
+        random_bytes(), // payload_merkle_root
+        random_bytes(), // invalid verifier_set_hash with no tracker account
+    )
+    .unwrap();
 
-    // Use the same message payload for both verifier sets to demonstrate PDA isolation
-    let message_payload = Payload::Messages(Messages(make_messages(5)));
+    let tx_outcome = metadata
+        .send_tx(&[invalid_ix])
+        .await
+        .expect_err("a transaction with an invalid verifier set hash should fail");
 
-    // Construct execution data - this will generate different payload merkle roots
-    // because the verifier set hash is included in the payload construction
-    let execute_data_a = metadata.construct_execute_data(&verifier_set_a, message_payload.clone());
-    let execute_data_b = metadata.construct_execute_data(&verifier_set_b, message_payload);
-
-    // Verify that different verifier sets produce different payload hashes
-    assert_ne!(
-        execute_data_a.payload_merkle_root, execute_data_b.payload_merkle_root,
-        "Different verifier sets must produce different payload merkle roots"
+    assert!(
+        tx_outcome.result.is_err(),
+        "expected account-related failure, but got a successful transaction instead",
     );
 
-    assert_ne!(
-        execute_data_a.signing_verifier_set_merkle_root,
-        execute_data_b.signing_verifier_set_merkle_root,
-        "Verifier sets should have different hashes"
-    );
+    // This marks the end of this test. What follows is a confidence check:
+    //
+    // We redo the same transaction, but this time with a valid verifier_set_hash (the one we have
+    // from the metadata value) and observe the transaction passing without errors.
 
-    // Act & Assert: Initialize verification sessions for both verifier sets
-    let mut verification_pdas = Vec::new();
+    let valid_ix = axelar_solana_gateway::instructions::initialize_payload_verification_session(
+        metadata.payer.pubkey(),
+        metadata.gateway_root_pda,
+        random_bytes(),
+        metadata.init_gateway_config_verifier_set_data().hash, // valid verifier set hash
+    )
+    .unwrap();
 
-    for execute_data in [execute_data_a, execute_data_b] {
-        // Derive the expected PDA for this payload
-        let (expected_pda, _) = axelar_solana_gateway::get_signature_verification_pda(
-            &execute_data.payload_merkle_root,
-        );
-        verification_pdas.push(expected_pda);
-
-        // Initialize the verification session
-        let ix = axelar_solana_gateway::instructions::initialize_payload_verification_session(
-            metadata.payer.pubkey(),
-            metadata.gateway_root_pda,
-            execute_data.payload_merkle_root,
-            execute_data.signing_verifier_set_merkle_root,
-        )
-        .unwrap();
-
-        let _tx_result = metadata.send_tx(&[ix]).await.unwrap();
-
-        // Verify the verification session was created successfully
-        let verification_session = metadata.signature_verification_session(expected_pda).await;
-
-        // Ensure the session has the correct verifier set hash
-        assert_eq!(
-            verification_session
-                .signature_verification
-                .signing_verifier_set_hash,
-            execute_data.signing_verifier_set_merkle_root,
-            "Verification session must store the correct signing verifier set hash"
-        );
-    }
-
-    // Assert: Verify that both verifier sets produced unique PDAs
-    assert_ne!(
-        verification_pdas[0], verification_pdas[1],
-        "Different verifier sets must produce distinct verification session PDAs"
+    assert!(
+        metadata.send_tx(&[valid_ix]).await.is_ok(),
+        "transaction with valid verifier set hash should succeed"
     );
 }

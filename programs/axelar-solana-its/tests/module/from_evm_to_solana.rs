@@ -418,7 +418,7 @@ async fn fail_when_chain_not_trusted(ctx: &mut ItsTestContext) {
         .fixture
         .send_tx_with_custom_signers(
             &[axelar_solana_its::instruction::remove_trusted_chain(
-                ctx.solana_chain.fixture.payer.insecure_clone().pubkey(),
+                ctx.solana_chain.fixture.payer.pubkey(),
                 ctx.solana_chain.upgrade_authority.pubkey(),
                 ctx.evm_chain_name.clone(),
             )

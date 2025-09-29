@@ -528,7 +528,7 @@ async fn axelar_solana_setup() -> (SolanaAxelarIntegrationMetadata, Pubkey) {
                 )
                 .unwrap(),
                 axelar_solana_its::instruction::set_trusted_chain(
-                    solana_chain.fixture.payer.insecure_clone().pubkey(),
+                    solana_chain.fixture.payer.pubkey(),
                     solana_chain.upgrade_authority.pubkey(),
                     EVM_CHAIN_NAME.to_owned(),
                 )

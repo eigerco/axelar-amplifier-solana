@@ -32,6 +32,7 @@ fn gen_discriminator(namespace: &str, name: impl ToString) -> proc_macro2::Token
 ///     pub amount: u64,
 /// }
 /// ```
+// https://github.com/solana-foundation/anchor/blob/d5d7eb97979234eb1e9e32fcef66ce171a928b62/lang/attribute/event/src/lib.rs#L32
 #[proc_macro_attribute]
 pub fn event(
     _args: proc_macro::TokenStream,
@@ -95,6 +96,7 @@ pub fn event(
 /// // or with default iterator name:
 /// event_cpi_accounts!();
 /// ```
+// https://github.com/solana-foundation/anchor/blob/d5d7eb97979234eb1e9e32fcef66ce171a928b62/lang/syn/src/parser/accounts/event_cpi.rs#L28
 #[proc_macro]
 pub fn event_cpi_accounts(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // Parse the input to get the accounts list name (optional)
@@ -152,6 +154,7 @@ pub fn event_cpi_accounts(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 /// };
 /// emit_cpi!(event);
 /// ```
+// https://github.com/solana-foundation/anchor/blob/d5d7eb97979234eb1e9e32fcef66ce171a928b62/lang/attribute/event/src/lib.rs#L157
 #[proc_macro]
 pub fn emit_cpi(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let event_struct = parse_macro_input!(input as syn::Expr);
@@ -228,8 +231,8 @@ pub fn emit_cpi(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///     // ...
 /// }
 /// ```
-#[proc_macro]
 // https://github.com/solana-foundation/anchor/blob/5300d7cf8aaf52da08ce331db3fc8182cd821228/lang/syn/src/codegen/program/handlers.rs#L213
+#[proc_macro]
 pub fn event_cpi_handler(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // Parse the input to get the accounts list name (optional)
     let instruction_data_name = if input.is_empty() {

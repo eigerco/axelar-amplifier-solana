@@ -803,6 +803,10 @@ impl Validate for TakeTokenAccounts<'_> {
             return Err(ProgramError::MissingRequiredSignature);
         }
 
+        if !self.authority.is_signer {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+
         if self.token_mint.owner != self.token_program.key {
             return Err(ProgramError::InvalidAccountData);
         }

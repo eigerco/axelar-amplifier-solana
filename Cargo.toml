@@ -176,6 +176,7 @@ proc-macro2 = "1"
 axelar-solana-its = { path = "programs/axelar-solana-its", default-features = false }
 axelar-solana-gas-service = { path = "programs/axelar-solana-gas-service", default-features = false }
 axelar-solana-memo-program = { path = "programs/axelar-solana-memo-program", default-features = false }
+axelar-solana-its-cpi-caller = { path = "programs/axelar-solana-its-cpi-caller", default-features = false }
 axelar-solana-multicall = { path = "programs/axelar-solana-multicall", default-features = false }
 axelar-solana-gateway = { path = "programs/axelar-solana-gateway", default-features = false }
 dummy-axelar-solana-gateway = { path = "programs/dummy-axelar-solana-gateway", default-features = false }

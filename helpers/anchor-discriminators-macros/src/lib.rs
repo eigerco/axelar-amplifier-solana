@@ -193,7 +193,7 @@ pub fn derive_instruction_discriminator(input: proc_macro::TokenStream) -> proc_
                     #(#deserialize_match_arms,)*
                     _ => Err(std::io::Error::new(
                         std::io::ErrorKind::InvalidData,
-                        format!("Unknown instruction discriminator: {:?}", discriminator),
+                        format!("Unknown {} discriminator: {:?}",  stringify!(#enum_name), discriminator),
                     )),
                 }
             }

@@ -60,3 +60,19 @@ fn test_serialization() {
     let add_gas_deser = GasServiceInstruction::try_from_slice(&add_gas_data).unwrap();
     assert_eq!(add_gas, add_gas_deser);
 }
+
+#[test]
+fn test_deserialization_error() {
+    let init = GasServiceInstruction::Initialize;
+    let mut init_data = borsh::to_vec(&init).unwrap();
+    init_data[0] ^= 0xFF; // Corrupt the discriminator
+
+    let deser_result = GasServiceInstruction::try_from_slice(&init_data);
+    assert!(deser_result.is_err());
+
+    let err = deser_result.err().unwrap();
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    assert!(err
+        .to_string()
+        .contains("Unknown GasServiceInstruction discriminator"));
+}

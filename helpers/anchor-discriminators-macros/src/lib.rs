@@ -98,7 +98,11 @@ pub fn derive_instruction_discriminator(input: proc_macro::TokenStream) -> proc_
                 let field_names: Vec<_> = fields
                     .named
                     .iter()
-                    .map(|f| f.ident.as_ref().unwrap())
+                    .map(|f| {
+                        f.ident
+                            .as_ref()
+                            .expect("Named fields must have identifiers")
+                    })
                     .collect();
                 let field_types: Vec<_> = fields.named.iter().map(|f| &f.ty).collect();
 

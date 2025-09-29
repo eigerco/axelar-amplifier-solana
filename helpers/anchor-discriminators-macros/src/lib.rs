@@ -6,6 +6,7 @@ use syn::parse_macro_input;
 
 use anchor_discriminators::{sighash, SIGHASH_GLOBAL_NAMESPACE};
 
+// https://github.com/solana-foundation/anchor/blob/56b21edd1f4c1865e5f943537fb7f89a0ffe5ede/lang/syn/src/codegen/program/common.rs#L21
 fn gen_discriminator(namespace: &str, name: impl ToString) -> proc_macro2::TokenStream {
     let discriminator = sighash(namespace, name.to_string().as_str());
     format!("{discriminator:?}").parse().unwrap()

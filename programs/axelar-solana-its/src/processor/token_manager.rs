@@ -586,7 +586,7 @@ pub(crate) fn process_transfer_operatorship<'a>(accounts: &'a [AccountInfo<'a>])
 
     validate_system_account_key(system_account.key)?;
 
-    if payer.key == destination_user_account.key {
+    if origin_user_account.key == destination_user_account.key {
         msg!("Source and destination accounts are the same");
         return Err(ProgramError::InvalidArgument);
     }
@@ -691,11 +691,6 @@ pub(crate) fn process_accept_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -
     let proposal_account = next_account_info(accounts_iter)?;
 
     validate_system_account_key(system_account.key)?;
-
-    if payer.key == origin_user_account.key {
-        msg!("Source and destination accounts are the same");
-        return Err(ProgramError::InvalidArgument);
-    }
 
     let role_management_accounts = RoleTransferWithProposalAccounts {
         system_account,

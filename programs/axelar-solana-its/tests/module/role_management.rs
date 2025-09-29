@@ -2036,3 +2036,132 @@ async fn test_simultaneous_role_proposals_different_roles(ctx: &mut ItsTestConte
     assert!(!updated_payer_roles.contains(Roles::MINTER));
     assert!(!updated_payer_roles.contains(Roles::OPERATOR));
 }
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_fail_accept_operatorship_to_self(ctx: &mut ItsTestContext) {
+    let bob = Keypair::new();
+
+    // First propose operatorship from wallet to bob
+    let propose_ix = axelar_solana_its::instruction::propose_operatorship(
+        ctx.solana_wallet,
+        ctx.solana_wallet,
+        bob.pubkey(),
+    )
+    .unwrap();
+
+    ctx.send_solana_tx(&[propose_ix]).await.unwrap();
+
+    // Now try to accept the proposal with bob as both origin and destination
+    // This should fail because origin and destination are the same
+    let accept_self_ix = axelar_solana_its::instruction::accept_operatorship(
+        ctx.solana_wallet,
+        bob.pubkey(),
+        bob.pubkey(), // Using bob as both origin and destination
+    )
+    .unwrap();
+
+    let tx_metadata = ctx
+        .solana_chain
+        .fixture
+        .send_tx_with_custom_signers(
+            &[accept_self_ix],
+            &[
+                &bob.insecure_clone(),
+                &ctx.solana_chain.fixture.payer.insecure_clone(),
+            ],
+        )
+        .await
+        .unwrap_err();
+
+    // Verify the transaction failed with self-transfer error
+    assert_msg_present_in_logs(tx_metadata, "Source and destination accounts are the same");
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_fail_accept_token_manager_operatorship_to_self(ctx: &mut ItsTestContext) {
+    let bob = Keypair::new();
+    let token_id = ctx.deployed_interchain_token;
+
+    // First propose token manager operatorship from payer to bob
+    let propose_ix = axelar_solana_its::instruction::token_manager::propose_operatorship(
+        ctx.solana_chain.fixture.payer.pubkey(),
+        ctx.solana_chain.fixture.payer.pubkey(),
+        token_id,
+        bob.pubkey(),
+    )
+    .unwrap();
+
+    ctx.send_solana_tx(&[propose_ix]).await.unwrap();
+
+    // Now try to accept the proposal with bob as both origin and destination
+    // This should fail because origin and destination are the same
+    let accept_self_ix = axelar_solana_its::instruction::token_manager::accept_operatorship(
+        ctx.solana_chain.fixture.payer.pubkey(),
+        bob.pubkey(),
+        token_id,
+        bob.pubkey(), // Using bob as both origin and destination
+    )
+    .unwrap();
+
+    let tx_metadata = ctx
+        .solana_chain
+        .fixture
+        .send_tx_with_custom_signers(
+            &[accept_self_ix],
+            &[
+                &bob.insecure_clone(),
+                &ctx.solana_chain.fixture.payer.insecure_clone(),
+            ],
+        )
+        .await
+        .unwrap_err();
+
+    // Verify the transaction failed with self-transfer error
+    assert_msg_present_in_logs(tx_metadata, "Source and destination accounts are the same");
+}
+
+#[test_context(ItsTestContext)]
+#[tokio::test]
+async fn test_fail_accept_mintership_to_self(ctx: &mut ItsTestContext) {
+    let bob = Keypair::new();
+    let token_id = ctx.deployed_interchain_token;
+
+    // First propose mintership from payer to bob
+    let propose_ix = axelar_solana_its::instruction::interchain_token::propose_mintership(
+        ctx.solana_chain.fixture.payer.pubkey(),
+        ctx.solana_chain.fixture.payer.pubkey(),
+        token_id,
+        bob.pubkey(),
+    )
+    .unwrap();
+
+    ctx.send_solana_tx(&[propose_ix]).await.unwrap();
+
+    // Now try to accept the proposal with bob as both origin and destination
+    // This should fail because origin and destination are the same
+    let accept_self_ix = axelar_solana_its::instruction::interchain_token::accept_mintership(
+        ctx.solana_chain.fixture.payer.pubkey(),
+        bob.pubkey(),
+        token_id,
+        bob.pubkey(), // Using bob as both origin and destination
+    )
+    .unwrap();
+
+    let tx_metadata = ctx
+        .solana_chain
+        .fixture
+        .send_tx_with_custom_signers(
+            &[accept_self_ix],
+            &[
+                &bob.insecure_clone(),
+                &ctx.solana_chain.fixture.payer.insecure_clone(),
+            ],
+        )
+        .await
+        .unwrap_err();
+
+    // Verify the transaction failed with self-transfer error
+    assert_msg_present_in_logs(tx_metadata, "Source and destination accounts are the same");
+}

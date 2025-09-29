@@ -397,7 +397,7 @@ fn process_transfer_operatorship<'a>(accounts: &'a [AccountInfo<'a>]) -> Program
 
     validate_system_account_key(system_account.key)?;
 
-    if payer.key == destination_user_account.key {
+    if origin_user_account.key == destination_user_account.key {
         msg!("Source and destination accounts are the same");
         return Err(ProgramError::InvalidArgument);
     }

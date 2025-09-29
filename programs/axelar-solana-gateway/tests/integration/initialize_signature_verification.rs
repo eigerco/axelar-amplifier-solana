@@ -1,5 +1,6 @@
-use axelar_solana_gateway::get_gateway_root_config_pda;
+use axelar_solana_encoding::hasher::NativeHasher;
 use axelar_solana_gateway::state::signature_verification::SignatureVerification;
+use axelar_solana_gateway::{get_gateway_root_config_pda, get_signature_verification_pda};
 use axelar_solana_gateway_test_fixtures::gateway::random_bytes;
 use axelar_solana_gateway_test_fixtures::SolanaAxelarIntegration;
 use bytemuck::Zeroable;
@@ -30,8 +31,10 @@ async fn test_initialize_payload_verification_session() {
     let _tx_result = metadata.send_tx(&[ix]).await.unwrap();
 
     // Check PDA contains the expected data
-    let (verification_pda, bump) =
-        axelar_solana_gateway::get_signature_verification_pda(&payload_merkle_root);
+    let (verification_pda, bump) = get_signature_verification_pda::<NativeHasher>(
+        &payload_merkle_root,
+        &signing_verifier_set_hash,
+    );
 
     let verification_session_account = metadata
         .try_get_account_no_checks(&verification_pda)

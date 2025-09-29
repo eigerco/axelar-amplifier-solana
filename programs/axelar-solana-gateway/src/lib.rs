@@ -6,6 +6,8 @@ pub mod instructions;
 pub mod processor;
 pub mod state;
 
+use axelar_solana_encoding::hasher::HashvSupport;
+use axelar_solana_encoding::types::verifier_set::construct_payload_hash;
 pub use bytemuck;
 pub use num_traits;
 pub use program_utils::ensure_single_feature;
@@ -218,12 +220,14 @@ pub fn assert_valid_verifier_set_tracker_pda(
 /// Get the PDA and bump seed for a given payload hash.
 #[inline]
 #[must_use]
-pub fn get_signature_verification_pda(payload_merkle_root: &[u8; 32]) -> (Pubkey, u8) {
+pub fn get_signature_verification_pda<T: HashvSupport>(
+    payload_merkle_root: &[u8; 32],
+    signing_verifier_set_hash: &[u8; 32],
+) -> (Pubkey, u8) {
+    let payload_hash =
+        construct_payload_hash::<T>(*payload_merkle_root, *signing_verifier_set_hash);
     let (pubkey, bump) = Pubkey::find_program_address(
-        &[
-            seed_prefixes::SIGNATURE_VERIFICATION_SEED,
-            payload_merkle_root,
-        ],
+        &[seed_prefixes::SIGNATURE_VERIFICATION_SEED, &payload_hash],
         &crate::ID,
     );
     (pubkey, bump)
@@ -241,15 +245,18 @@ pub fn get_signature_verification_pda(payload_merkle_root: &[u8; 32]) -> (Pubkey
 /// Panics if PDA creation fails due to an invalid bump seed.
 #[inline]
 #[track_caller]
-pub fn assert_valid_signature_verification_pda(
+pub fn assert_valid_signature_verification_pda<T: HashvSupport>(
     payload_merkle_root: &[u8; 32],
+    signing_verifier_set_hash: &[u8; 32],
     bump: u8,
     expected_pubkey: &Pubkey,
 ) -> Result<(), ProgramError> {
+    let payload_hash =
+        construct_payload_hash::<T>(*payload_merkle_root, *signing_verifier_set_hash);
     let derived_pubkey = Pubkey::create_program_address(
         &[
             seed_prefixes::SIGNATURE_VERIFICATION_SEED,
-            payload_merkle_root,
+            &payload_hash,
             &[bump],
         ],
         &crate::ID,
@@ -269,14 +276,17 @@ pub fn assert_valid_signature_verification_pda(
 /// Returns a [`PubkeyError`] if the derived address lies on the ed25519 curve and is therefore not
 /// a valid program derived address.
 #[inline]
-pub fn create_signature_verification_pda(
+pub fn create_signature_verification_pda<T: HashvSupport>(
     payload_merkle_root: &[u8; 32],
+    signing_verifier_set_hash: &[u8; 32],
     bump: u8,
 ) -> Result<Pubkey, PubkeyError> {
+    let payload_hash =
+        construct_payload_hash::<T>(*payload_merkle_root, *signing_verifier_set_hash);
     Pubkey::create_program_address(
         &[
             seed_prefixes::SIGNATURE_VERIFICATION_SEED,
-            payload_merkle_root,
+            &payload_hash,
             &[bump],
         ],
         &crate::ID,
@@ -391,8 +401,14 @@ mod tests {
     #[test]
     fn test_get_and_create_signature_verification_pda_bump_reuse() {
         let payload_merkle_root = rand::random();
-        let (found_pda, bump) = get_signature_verification_pda(&payload_merkle_root);
-        let created_pda = create_signature_verification_pda(&payload_merkle_root, bump).unwrap();
+        let signing_verifier_set_hash = rand::random();
+        let (found_pda, bump) = get_signature_verification_pda::<
+            axelar_solana_encoding::hasher::SolanaSyscallHasher,
+        >(&payload_merkle_root, &signing_verifier_set_hash);
+        let created_pda = create_signature_verification_pda::<
+            axelar_solana_encoding::hasher::SolanaSyscallHasher,
+        >(&payload_merkle_root, &signing_verifier_set_hash, bump)
+        .unwrap();
         assert_eq!(found_pda, created_pda);
     }
 

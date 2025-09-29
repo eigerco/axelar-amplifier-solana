@@ -155,6 +155,7 @@ impl SolanaAxelarIntegrationMetadata {
                 gateway_config_pda,
                 verifier_set_tracker_pda,
                 execute_data.payload_merkle_root,
+                execute_data.signing_verifier_set_merkle_root,
                 signature_leaves.clone(),
             )
             .unwrap();
@@ -168,8 +169,11 @@ impl SolanaAxelarIntegrationMetadata {
         }
 
         // Check that the PDA contains the expected data
-        let (verification_pda, _bump) = axelar_solana_gateway::get_signature_verification_pda(
+        let (verification_pda, _bump) = axelar_solana_gateway::get_signature_verification_pda::<
+            axelar_solana_encoding::hasher::SolanaSyscallHasher,
+        >(
             &execute_data.payload_merkle_root,
+            &execute_data.signing_verifier_set_merkle_root,
         );
         Ok(verification_pda)
     }

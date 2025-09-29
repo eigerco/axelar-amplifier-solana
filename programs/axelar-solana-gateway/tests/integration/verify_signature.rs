@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
+use axelar_solana_encoding::hasher::NativeHasher;
 use axelar_solana_encoding::types::messages::Messages;
 use axelar_solana_encoding::types::payload::Payload;
 use axelar_solana_encoding::types::pubkey::{PublicKey, Signature};
 use axelar_solana_gateway::error::GatewayError;
+use axelar_solana_gateway::get_signature_verification_pda;
 use axelar_solana_gateway::state::signature_verification::verify_ecdsa_signature;
 use axelar_solana_gateway_test_fixtures::base::FindLog;
 use axelar_solana_gateway_test_fixtures::gateway::{
@@ -45,6 +47,7 @@ async fn test_verify_one_signature(
         metadata.gateway_root_pda,
         verifier_set_tracker_pda,
         execute_data.payload_merkle_root,
+        execute_data.signing_verifier_set_merkle_root,
         leaf_info.clone(),
     )
     .unwrap();
@@ -59,8 +62,10 @@ async fn test_verify_one_signature(
         .unwrap();
 
     // Check that the PDA contains the expected data
-    let (verification_pda, bump) =
-        axelar_solana_gateway::get_signature_verification_pda(&execute_data.payload_merkle_root);
+    let (verification_pda, bump) = get_signature_verification_pda::<NativeHasher>(
+        &execute_data.payload_merkle_root,
+        &execute_data.signing_verifier_set_merkle_root,
+    );
 
     let session = metadata
         .signature_verification_session(verification_pda)
@@ -105,6 +110,7 @@ async fn test_verify_all_signatures() {
             metadata.gateway_root_pda,
             verifier_set_tracker_pda,
             execute_data.payload_merkle_root,
+            execute_data.signing_verifier_set_merkle_root,
             verifier_set_leaf,
         )
         .unwrap();
@@ -118,8 +124,10 @@ async fn test_verify_all_signatures() {
     }
 
     // Check that the PDA contains the expected data
-    let (verification_pda, bump) =
-        axelar_solana_gateway::get_signature_verification_pda(&execute_data.payload_merkle_root);
+    let (verification_pda, bump) = get_signature_verification_pda::<NativeHasher>(
+        &execute_data.payload_merkle_root,
+        &execute_data.signing_verifier_set_merkle_root,
+    );
 
     let session = metadata
         .signature_verification_session(verification_pda)
@@ -169,6 +177,7 @@ async fn test_fails_to_verify_bad_signature() {
         metadata.gateway_root_pda,
         verifier_set_tracker_pda,
         execute_data.payload_merkle_root,
+        execute_data.signing_verifier_set_merkle_root,
         leaf_info.clone(),
     )
     .unwrap();
@@ -222,6 +231,7 @@ async fn test_fails_to_verify_signature_for_different_merkle_root() {
         metadata.gateway_root_pda,
         verifier_set_tracker_pda,
         random_valid_merkle_root, // <- this is the failure culprit
+        execute_data.signing_verifier_set_merkle_root,
         leaf_info.clone(),
     )
     .unwrap();
@@ -288,6 +298,7 @@ async fn test_large_weight_will_validate_whole_batch() {
         metadata.gateway_root_pda,
         verifier_set_tracker_pda,
         execute_data.payload_merkle_root,
+        execute_data.signing_verifier_set_merkle_root,
         large_wetight_leaf.clone(),
     )
     .unwrap();
@@ -302,8 +313,10 @@ async fn test_large_weight_will_validate_whole_batch() {
         .unwrap();
 
     // Check that the PDA contains the expected data
-    let (verification_pda, bump) =
-        axelar_solana_gateway::get_signature_verification_pda(&execute_data.payload_merkle_root);
+    let (verification_pda, bump) = get_signature_verification_pda::<NativeHasher>(
+        &execute_data.payload_merkle_root,
+        &execute_data.signing_verifier_set_merkle_root,
+    );
 
     let session = metadata
         .signature_verification_session(verification_pda)
@@ -446,6 +459,7 @@ async fn fails_to_verify_signature_with_invalid_domain_separator() {
         metadata.gateway_root_pda,
         verifier_set_tracker_pda,
         execute_data.payload_merkle_root,
+        execute_data.signing_verifier_set_merkle_root,
         leaf_info,
     )
     .unwrap();
@@ -479,8 +493,10 @@ async fn test_verify_all_signatures_when_session_pda_has_lamports() {
         .await;
     let execute_data = metadata.construct_execute_data(&metadata.signers.clone(), payload);
 
-    let (verification_session_pda, _) =
-        axelar_solana_gateway::get_signature_verification_pda(&execute_data.payload_merkle_root);
+    let (verification_session_pda, _) = get_signature_verification_pda::<NativeHasher>(
+        &execute_data.payload_merkle_root,
+        &execute_data.signing_verifier_set_merkle_root,
+    );
     let payer = metadata.fixture.payer.pubkey();
 
     // Transfer lamports to the PDA to try to prevent its initialization
@@ -505,6 +521,7 @@ async fn test_verify_all_signatures_when_session_pda_has_lamports() {
             metadata.gateway_root_pda,
             verifier_set_tracker_pda,
             execute_data.payload_merkle_root,
+            execute_data.signing_verifier_set_merkle_root,
             verifier_set_leaf,
         )
         .unwrap();
@@ -518,8 +535,10 @@ async fn test_verify_all_signatures_when_session_pda_has_lamports() {
     }
 
     // Check that the PDA contains the expected data
-    let (verification_pda, bump) =
-        axelar_solana_gateway::get_signature_verification_pda(&execute_data.payload_merkle_root);
+    let (verification_pda, bump) = get_signature_verification_pda::<NativeHasher>(
+        &execute_data.payload_merkle_root,
+        &execute_data.signing_verifier_set_merkle_root,
+    );
 
     let session = metadata
         .signature_verification_session(verification_pda)
@@ -561,6 +580,7 @@ async fn test_fails_when_verifier_submits_signature_twice() {
         metadata.gateway_root_pda,
         verifier_set_tracker_pda,
         execute_data.payload_merkle_root,
+        execute_data.signing_verifier_set_merkle_root,
         leaf_info.clone(),
     )
     .unwrap();

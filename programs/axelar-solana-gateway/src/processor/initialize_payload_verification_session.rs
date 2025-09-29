@@ -1,3 +1,5 @@
+use axelar_solana_encoding::hasher::SolanaSyscallHasher;
+use axelar_solana_encoding::types::verifier_set::construct_payload_hash;
 use core::mem::size_of;
 use program_utils::pda::{BytemuckedPda, ValidPDA};
 use solana_program::account_info::{next_account_info, AccountInfo};
@@ -113,7 +115,9 @@ impl Processor {
 
         // Check: Verification PDA can be derived from provided seeds.
         // using canonical bump for the session account
-        let (verification_session_pda, bump) = crate::get_signature_verification_pda(&merkle_root);
+        let (verification_session_pda, bump) = crate::get_signature_verification_pda::<
+            SolanaSyscallHasher,
+        >(&merkle_root, &signing_verifier_set_hash);
         if verification_session_pda != *verification_session_account.key {
             return Err(GatewayError::InvalidVerificationSessionPDA.into());
         }
@@ -125,9 +129,11 @@ impl Processor {
 
         // Use the same seeds as `[crate::get_signature_verification_pda]`, plus the
         // bump seed.
+        let payload_hash =
+            construct_payload_hash::<SolanaSyscallHasher>(merkle_root, signing_verifier_set_hash);
         let signers_seeds = &[
             seed_prefixes::SIGNATURE_VERIFICATION_SEED,
-            &merkle_root,
+            &payload_hash,
             &[bump],
         ];
 

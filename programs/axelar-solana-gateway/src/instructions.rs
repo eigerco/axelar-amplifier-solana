@@ -2,6 +2,7 @@
 
 use core::fmt::Debug;
 
+use axelar_solana_encoding::hasher::NativeHasher;
 use axelar_solana_encoding::types::execute_data::{MerkleisedMessage, SigningVerifierSetInfo};
 use axelar_solana_encoding::types::messages::Message;
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
@@ -10,6 +11,7 @@ use solana_program::instruction::{AccountMeta, Instruction};
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 
+use crate::get_signature_verification_pda;
 use crate::state::config::{RotationDelaySecs, VerifierSetEpoch};
 use crate::state::verifier_set_tracker::VerifierSetHash;
 
@@ -398,7 +400,10 @@ pub fn initialize_payload_verification_session(
     payload_merkle_root: [u8; 32],
     signing_verifier_set_hash: [u8; 32],
 ) -> Result<Instruction, ProgramError> {
-    let (verification_session_pda, _) = crate::get_signature_verification_pda(&payload_merkle_root);
+    let (verification_session_pda, _) = get_signature_verification_pda::<NativeHasher>(
+        &payload_merkle_root,
+        &signing_verifier_set_hash,
+    );
     let (verifier_set_tracker_pda, _) =
         crate::get_verifier_set_tracker_pda(signing_verifier_set_hash);
 
@@ -432,10 +437,13 @@ pub fn verify_signature(
     gateway_config_pda: Pubkey,
     verifier_set_tracker_pda: Pubkey,
     payload_merkle_root: [u8; 32],
+    signing_verifier_set_hash: [u8; 32],
     verifier_info: SigningVerifierSetInfo,
 ) -> Result<Instruction, ProgramError> {
-    let (verification_session_pda, _bump) =
-        crate::get_signature_verification_pda(&payload_merkle_root);
+    let (verification_session_pda, _bump) = get_signature_verification_pda::<NativeHasher>(
+        &payload_merkle_root,
+        &signing_verifier_set_hash,
+    );
 
     let accounts = vec![
         AccountMeta::new_readonly(gateway_config_pda, false),

@@ -2,7 +2,9 @@ use core::convert::TryInto;
 use core::mem::size_of;
 
 use axelar_message_primitives::U256;
-use axelar_solana_encoding::hasher::SolanaSyscallHasher;
+use axelar_solana_encoding::{
+    hasher::SolanaSyscallHasher, types::verifier_set::construct_payload_hash,
+};
 use event_utils::{read_array, EventParseError};
 use program_utils::{
     pda::{BytemuckedPda, ValidPDA},
@@ -16,15 +18,14 @@ use solana_program::pubkey::Pubkey;
 use solana_program::sysvar::Sysvar;
 
 use super::Processor;
-use crate::error::GatewayError;
 use crate::state::signature_verification_pda::SignatureVerificationSessionData;
 use crate::state::verifier_set_tracker::VerifierSetTracker;
 use crate::state::GatewayConfig;
 use crate::{
-    assert_valid_gateway_root_pda, assert_valid_signature_verification_pda,
-    assert_valid_verifier_set_tracker_pda, event_prefixes, get_verifier_set_tracker_pda,
-    seed_prefixes,
+    assert_valid_gateway_root_pda, assert_valid_verifier_set_tracker_pda, event_prefixes,
+    get_verifier_set_tracker_pda, seed_prefixes,
 };
+use crate::{error::GatewayError, get_signature_verification_pda};
 
 impl Processor {
     /// Rotate the weighted signers, signed off by the latest Axelar signers.
@@ -87,21 +88,24 @@ impl Processor {
             .ok_or(GatewayError::BytemuckDataLenInvalid)?;
 
         // New verifier set merkle root can be transformed into the payload hash
-        let rotate_verifier_set_hash =
-            axelar_solana_encoding::types::verifier_set::construct_payload_hash::<
-                SolanaSyscallHasher,
-            >(
-                new_verifier_set_merkle_root,
-                session.signature_verification.signing_verifier_set_hash,
-            );
+        let rotate_verifier_set_hash = construct_payload_hash::<SolanaSyscallHasher>(
+            new_verifier_set_merkle_root,
+            session.signature_verification.signing_verifier_set_hash,
+        );
 
         // Check: Verification PDA can be derived from seeds stored into the account
-        // data itself.
-        assert_valid_signature_verification_pda(
+        // data itself. For verifier set rotation, the payload hash is already the
+        // concatenated hash, so we need to validate it differently.
+
+        // Get the expected PDA using the concatenated hash directly
+        let (expected_pda, expected_bump) = get_signature_verification_pda::<SolanaSyscallHasher>(
             &rotate_verifier_set_hash,
-            session.bump,
-            verification_session_account.key,
-        )?;
+            &session.signature_verification.signing_verifier_set_hash,
+        );
+
+        if expected_pda != *verification_session_account.key || expected_bump != session.bump {
+            return Err(GatewayError::InvalidVerificationSessionPDA.into());
+        }
 
         if !session.signature_verification.is_valid() {
             return Err(GatewayError::SigningSessionNotValid.into());

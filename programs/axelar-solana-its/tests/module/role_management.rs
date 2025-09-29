@@ -906,7 +906,7 @@ async fn test_set_trusted_chain_failure_without_authority(ctx: &mut ItsTestConte
 
     // Verify the transaction failed with proper error
     assert!(tx_metadata
-        .find_log("Payer is neither upgrade authority nor operator")
+        .find_log("Account passed as authority is neither upgrade authority nor operator")
         .is_some());
 
     // Verify the chain was NOT added as trusted
@@ -1155,7 +1155,7 @@ async fn test_remove_trusted_chain_failure_without_authority(ctx: &mut ItsTestCo
 
     // Verify the transaction failed with proper error
     assert!(tx_metadata
-        .find_log("Payer is neither upgrade authority nor operator")
+        .find_log("Account passed as authority is neither upgrade authority nor operator")
         .is_some());
 
     // Verify the chain was NOT removed

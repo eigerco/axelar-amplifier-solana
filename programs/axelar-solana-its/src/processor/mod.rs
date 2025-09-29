@@ -544,7 +544,7 @@ fn process_set_trusted_chain<'a>(
         )
         .is_err()
     {
-        msg!("Payer is neither upgrade authority nor operator");
+        msg!("Account passed as authority is neither upgrade authority nor operator");
         return Err(ProgramError::MissingRequiredSignature);
     }
 
@@ -578,7 +578,7 @@ fn process_remove_trusted_chain<'a>(
         )
         .is_err()
     {
-        msg!("Payer is neither upgrade authority nor operator");
+        msg!("Account passed as authority is neither upgrade authority nor operator");
         return Err(ProgramError::MissingRequiredSignature);
     }
     let mut its_root_config = InterchainTokenService::load(its_root_pda)?;

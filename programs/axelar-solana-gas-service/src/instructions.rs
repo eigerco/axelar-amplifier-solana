@@ -186,16 +186,11 @@ pub fn init_config(payer: &Pubkey, operator: &Pubkey) -> Result<Instruction, Pro
     let ix_data = borsh::to_vec(&GasServiceInstruction::Initialize)?;
     let (config_pda, _bump) = crate::get_config_pda();
 
-    let (event_authority, _bump) =
-        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
-
     let accounts = vec![
         AccountMeta::new(*payer, true),
         AccountMeta::new_readonly(*operator, true),
         AccountMeta::new(config_pda, false),
         AccountMeta::new_readonly(system_program::ID, false),
-        AccountMeta::new_readonly(event_authority, false),
-        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     Ok(Instruction {
@@ -216,15 +211,10 @@ pub fn transfer_operatorship(
     let ix_data = borsh::to_vec(&GasServiceInstruction::TransferOperatorship)?;
     let (config_pda, _bump) = crate::get_config_pda();
 
-    let (event_authority, _bump) =
-        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
-
     let accounts = vec![
         AccountMeta::new(*current_operator, true),
         AccountMeta::new_readonly(*new_operator, false),
         AccountMeta::new(config_pda, false),
-        AccountMeta::new_readonly(event_authority, false),
-        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     Ok(Instruction {
@@ -323,15 +313,10 @@ pub fn collect_native_fees_instruction(
     let ix_data = borsh::to_vec(&GasServiceInstruction::CollectNativeFees { amount })?;
     let (config_pda, _bump) = crate::get_config_pda();
 
-    let (event_authority, _bump) =
-        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
-
     let accounts = vec![
         AccountMeta::new_readonly(*operator, true),
         AccountMeta::new(*receiver, false),
         AccountMeta::new(config_pda, false),
-        AccountMeta::new_readonly(event_authority, false),
-        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     Ok(Instruction {
@@ -411,6 +396,9 @@ pub fn pay_spl_for_contract_call_instruction(
             token_program_id,
         );
 
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
+
     let mut accounts = vec![
         AccountMeta::new_readonly(*sender, true),
         AccountMeta::new(*sender_token_account, false),
@@ -418,6 +406,8 @@ pub fn pay_spl_for_contract_call_instruction(
         AccountMeta::new(config_pda_token_account, false),
         AccountMeta::new_readonly(*mint, false),
         AccountMeta::new_readonly(*token_program_id, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     for signer_pubkey in signer_pubkeys {
@@ -463,6 +453,9 @@ pub fn add_spl_gas_instruction(
             token_program_id,
         );
 
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
+
     let mut accounts = vec![
         AccountMeta::new_readonly(*sender, true),
         AccountMeta::new(*sender_token_account, false),
@@ -470,6 +463,8 @@ pub fn add_spl_gas_instruction(
         AccountMeta::new(config_pda_token_account, false),
         AccountMeta::new_readonly(*mint, false),
         AccountMeta::new_readonly(*token_program_id, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
     ];
     for signer_pubkey in signer_pubkeys {
         accounts.push(AccountMeta::new_readonly(*signer_pubkey, true));
@@ -549,6 +544,9 @@ pub fn refund_spl_fees_instruction(
             token_program_id,
         );
 
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
+
     let accounts = vec![
         AccountMeta::new_readonly(*operator, true),
         AccountMeta::new(*receiver, false),
@@ -556,6 +554,8 @@ pub fn refund_spl_fees_instruction(
         AccountMeta::new(config_pda_token_account, false),
         AccountMeta::new_readonly(*mint, false),
         AccountMeta::new_readonly(*token_program_id, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     Ok(Instruction {

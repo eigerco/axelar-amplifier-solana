@@ -67,7 +67,7 @@ async fn test_add_native_gas() {
         .first()
         .cloned()
         .unwrap();
-    assert!(inner_ixs.len() > 0);
+    assert!(!inner_ixs.is_empty());
 
     let expected_event = NativeGasAddedEvent {
         config_pda: gas_utils.config_pda,

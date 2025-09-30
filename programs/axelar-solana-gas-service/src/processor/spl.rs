@@ -82,7 +82,7 @@ pub(crate) fn process_pay_spl_for_contract_call(
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    let (accounts, signer_pubkeys) = accounts.split_at(6);
+    let (accounts, signer_pubkeys) = accounts.split_at(8);
     let accounts = &mut accounts.iter();
     let sender = next_account_info(accounts)?;
     let sender_token_account = next_account_info(accounts)?;
@@ -160,7 +160,7 @@ pub(crate) fn add_spl_gas(
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    let (accounts, signer_pubkeys) = accounts.split_at(6);
+    let (accounts, signer_pubkeys) = accounts.split_at(8);
     let accounts = &mut accounts.iter();
     let sender = next_account_info(accounts)?;
     let sender_token_account = next_account_info(accounts)?;
@@ -242,19 +242,16 @@ pub(crate) fn refund_spl(
     fees: u64,
     decimals: u8,
 ) -> ProgramResult {
-    let (send_accounts, event_accounts) = accounts.split_at(6);
-    send_spl(program_id, send_accounts, fees, decimals)?;
+    send_spl(program_id, accounts, fees, decimals)?;
 
-    let event_accounts = &mut event_accounts.iter();
-    event_cpi_accounts!(event_accounts);
-
-    let accounts_iter = &mut send_accounts.iter();
+    let accounts_iter = &mut accounts.iter();
     let _operator = next_account_info(accounts_iter)?;
     let receiver_token_account = next_account_info(accounts_iter)?;
     let config_pda = next_account_info(accounts_iter)?;
     let config_pda_token_account = next_account_info(accounts_iter)?;
     let mint = next_account_info(accounts_iter)?;
     let token_program = next_account_info(accounts_iter)?;
+    event_cpi_accounts!(accounts_iter);
 
     // Emit an event
     emit_cpi!(SplGasRefundedEvent {

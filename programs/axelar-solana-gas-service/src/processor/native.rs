@@ -30,7 +30,7 @@ pub(crate) fn process_pay_native_for_contract_call(
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    let (accounts, _signer_pubkeys) = accounts.split_at(3);
+    let (accounts, _signer_pubkeys) = accounts.split_at(5);
     let accounts = &mut accounts.iter();
     let sender = next_account_info(accounts)?;
     let config_pda = next_account_info(accounts)?;
@@ -84,7 +84,7 @@ pub(crate) fn add_native_gas(
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    let (accounts, _signer_pubkeys) = accounts.split_at(3);
+    let (accounts, _signer_pubkeys) = accounts.split_at(5);
     let accounts = &mut accounts.iter();
     let sender = next_account_info(accounts)?;
     let config_pda = next_account_info(accounts)?;
@@ -129,16 +129,13 @@ pub(crate) fn refund_native(
     log_index: u64,
     fees: u64,
 ) -> ProgramResult {
-    let (send_accounts, event_accounts) = accounts.split_at(3);
-    send_native(program_id, send_accounts, fees)?;
+    send_native(program_id, accounts, fees)?;
 
-    let event_accounts = &mut event_accounts.iter();
-    event_cpi_accounts!(event_accounts);
-
-    let accounts = &mut send_accounts.iter();
+    let accounts = &mut accounts.iter();
     let _operator = next_account_info(accounts)?;
     let receiver = next_account_info(accounts)?;
     let config_pda = next_account_info(accounts)?;
+    event_cpi_accounts!(accounts);
 
     // Emit an event
     emit_cpi!(NativeGasRefundedEvent {

@@ -62,6 +62,7 @@ fn test_serialization() {
 }
 
 #[test]
+#[allow(clippy::indexing_slicing)]
 fn test_deserialization_error() {
     let init = GasServiceInstruction::Initialize;
     let mut init_data = borsh::to_vec(&init).unwrap();

@@ -186,11 +186,16 @@ pub fn init_config(payer: &Pubkey, operator: &Pubkey) -> Result<Instruction, Pro
     let ix_data = borsh::to_vec(&GasServiceInstruction::Initialize)?;
     let (config_pda, _bump) = crate::get_config_pda();
 
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
+
     let accounts = vec![
         AccountMeta::new(*payer, true),
         AccountMeta::new_readonly(*operator, true),
         AccountMeta::new(config_pda, false),
         AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     Ok(Instruction {
@@ -211,10 +216,15 @@ pub fn transfer_operatorship(
     let ix_data = borsh::to_vec(&GasServiceInstruction::TransferOperatorship)?;
     let (config_pda, _bump) = crate::get_config_pda();
 
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
+
     let accounts = vec![
         AccountMeta::new(*current_operator, true),
         AccountMeta::new_readonly(*new_operator, false),
         AccountMeta::new(config_pda, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     Ok(Instruction {
@@ -246,10 +256,15 @@ pub fn pay_native_for_contract_call_instruction(
     })?;
     let (config_pda, _bump) = crate::get_config_pda();
 
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
+
     let accounts = vec![
         AccountMeta::new(*payer, true),
         AccountMeta::new(config_pda, false),
         AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     Ok(Instruction {
@@ -278,10 +293,15 @@ pub fn add_native_gas_instruction(
     })?;
     let (config_pda, _bump) = crate::get_config_pda();
 
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
+
     let accounts = vec![
         AccountMeta::new(*sender, true),
         AccountMeta::new(config_pda, false),
         AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     Ok(Instruction {
@@ -303,10 +323,15 @@ pub fn collect_native_fees_instruction(
     let ix_data = borsh::to_vec(&GasServiceInstruction::CollectNativeFees { amount })?;
     let (config_pda, _bump) = crate::get_config_pda();
 
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
+
     let accounts = vec![
         AccountMeta::new_readonly(*operator, true),
         AccountMeta::new(*receiver, false),
         AccountMeta::new(config_pda, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     Ok(Instruction {
@@ -334,10 +359,15 @@ pub fn refund_native_fees_instruction(
     })?;
     let (config_pda, _) = crate::get_config_pda();
 
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
+
     let accounts = vec![
         AccountMeta::new_readonly(*operator, true),
         AccountMeta::new(*receiver, false),
         AccountMeta::new(config_pda, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     Ok(Instruction {

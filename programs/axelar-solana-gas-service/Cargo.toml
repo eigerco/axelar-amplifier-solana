@@ -17,8 +17,11 @@ axelar-solana-gas-service-events.workspace = true
 bytemuck.workspace = true
 borsh.workspace = true
 program-utils.workspace = true
+event-cpi.workspace = true
+event-cpi-macros.workspace = true
 
 [dev-dependencies]
+event-cpi-test-utils.workspace = true
 solana-sdk.workspace = true
 solana-program-test.workspace = true
 axelar-solana-gateway-test-fixtures.workspace = true

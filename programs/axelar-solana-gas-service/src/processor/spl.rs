@@ -1,9 +1,9 @@
-use axelar_solana_gas_service_events::event_prefixes;
+use crate::events::{SplGasAddedEvent, SplGasPaidForContractCallEvent, SplGasRefundedEvent};
+use event_cpi_macros::{emit_cpi, event_cpi_accounts};
 use program_utils::pda::{BytemuckedPda, ValidPDA};
 use solana_program::account_info::{next_account_info, AccountInfo};
 use solana_program::entrypoint::ProgramResult;
 use solana_program::instruction::Instruction;
-use solana_program::log::sol_log_data;
 use solana_program::msg;
 use solana_program::program::invoke;
 use solana_program::program::invoke_signed;
@@ -90,6 +90,7 @@ pub(crate) fn process_pay_spl_for_contract_call(
     let config_pda_token_account = next_account_info(accounts)?;
     let mint = next_account_info(accounts)?;
     let token_program = next_account_info(accounts)?;
+    event_cpi_accounts!(accounts);
 
     if !sender.is_signer {
         return Err(ProgramError::MissingRequiredSignature);
@@ -130,18 +131,17 @@ pub(crate) fn process_pay_spl_for_contract_call(
     )?;
 
     // Emit an event
-    sol_log_data(&[
-        event_prefixes::SPL_PAID_FOR_CONTRACT_CALL,
-        &config_pda.key.to_bytes(),
-        &config_pda_token_account.key.to_bytes(),
-        &mint.key.to_bytes(),
-        &token_program.key.to_bytes(),
-        &destination_chain.into_bytes(),
-        &destination_address.into_bytes(),
-        &payload_hash,
-        &refund_address.to_bytes(),
-        &gas_fee_amount.to_le_bytes(),
-    ]);
+    emit_cpi!(SplGasPaidForContractCallEvent {
+        config_pda: *config_pda.key,
+        config_pda_ata: *config_pda_token_account.key,
+        mint: *mint.key,
+        token_program_id: *token_program.key,
+        destination_chain,
+        destination_address,
+        payload_hash,
+        refund_address,
+        gas_fee_amount,
+    });
 
     Ok(())
 }
@@ -168,6 +168,7 @@ pub(crate) fn add_spl_gas(
     let config_pda_token_account = next_account_info(accounts)?;
     let mint = next_account_info(accounts)?;
     let token_program = next_account_info(accounts)?;
+    event_cpi_accounts!(accounts);
 
     if !sender.is_signer {
         return Err(ProgramError::MissingRequiredSignature);
@@ -208,17 +209,16 @@ pub(crate) fn add_spl_gas(
     )?;
 
     // Emit an event
-    sol_log_data(&[
-        event_prefixes::SPL_GAS_ADDED,
-        &config_pda.key.to_bytes(),
-        &config_pda_token_account.key.to_bytes(),
-        &mint.key.to_bytes(),
-        &token_program.key.to_bytes(),
-        &tx_hash,
-        &log_index.to_le_bytes(),
-        &refund_address.to_bytes(),
-        &gas_fee_amount.to_le_bytes(),
-    ]);
+    emit_cpi!(SplGasAddedEvent {
+        config_pda: *config_pda.key,
+        config_pda_ata: *config_pda_token_account.key,
+        mint: *mint.key,
+        token_program_id: *token_program.key,
+        tx_hash,
+        log_index,
+        refund_address,
+        gas_fee_amount,
+    });
 
     Ok(())
 }
@@ -242,9 +242,13 @@ pub(crate) fn refund_spl(
     fees: u64,
     decimals: u8,
 ) -> ProgramResult {
-    send_spl(program_id, accounts, fees, decimals)?;
+    let (send_accounts, event_accounts) = accounts.split_at(6);
+    send_spl(program_id, send_accounts, fees, decimals)?;
 
-    let accounts_iter = &mut accounts.iter();
+    let event_accounts = &mut event_accounts.iter();
+    event_cpi_accounts!(event_accounts);
+
+    let accounts_iter = &mut send_accounts.iter();
     let _operator = next_account_info(accounts_iter)?;
     let receiver_token_account = next_account_info(accounts_iter)?;
     let config_pda = next_account_info(accounts_iter)?;
@@ -253,17 +257,16 @@ pub(crate) fn refund_spl(
     let token_program = next_account_info(accounts_iter)?;
 
     // Emit an event
-    sol_log_data(&[
-        event_prefixes::SPL_GAS_REFUNDED,
-        &tx_hash,
-        &config_pda.key.to_bytes(),
-        &config_pda_token_account.key.to_bytes(),
-        &mint.key.to_bytes(),
-        &token_program.key.to_bytes(),
-        &log_index.to_le_bytes(),
-        &receiver_token_account.key.to_bytes(),
-        &fees.to_le_bytes(),
-    ]);
+    emit_cpi!(SplGasRefundedEvent {
+        config_pda_ata: *config_pda_token_account.key,
+        mint: *mint.key,
+        token_program_id: *token_program.key,
+        tx_hash,
+        config_pda: *config_pda.key,
+        log_index,
+        receiver: *receiver_token_account.key,
+        fees,
+    });
 
     Ok(())
 }

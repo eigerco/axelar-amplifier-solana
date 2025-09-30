@@ -2307,6 +2307,7 @@ dependencies = [
 name = "dummy-axelar-solana-gateway"
 version = "0.1.0"
 dependencies = [
+ "anchor-discriminators-macros",
  "borsh 1.5.7",
  "program-utils",
  "solana-program",

@@ -41,8 +41,8 @@ impl Processor {
     pub fn process_call_contract(
         program_id: &Pubkey,
         accounts: &[AccountInfo<'_>],
-        destination_chain: &str,
-        destination_contract_address: &str,
+        destination_chain: String,
+        destination_contract_address: String,
         payload: Vec<u8>,
         signing_pda_bump: u8,
     ) -> ProgramResult {
@@ -93,8 +93,8 @@ impl Processor {
         emit_cpi!(CallContractEvent {
             sender: *sender.key,
             payload_hash,
-            destination_chain: destination_chain.to_owned(),
-            destination_contract_address: destination_contract_address.to_owned(),
+            destination_chain,
+            destination_contract_address,
             payload,
         });
 

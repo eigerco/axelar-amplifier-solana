@@ -13,7 +13,7 @@ use axelar_solana_gateway_test_fixtures::gateway::{
     make_messages, make_verifier_set, GetGatewayError,
 };
 use axelar_solana_gateway_test_fixtures::SolanaAxelarIntegration;
-use event_cpi_test_utils::{assert_event_cpi, find_event_cpi};
+use event_cpi_test_utils::{assert_event_cpi, contains_event_cpi};
 use itertools::Itertools;
 use pretty_assertions::assert_eq;
 use solana_program_test::tokio;
@@ -185,7 +185,7 @@ async fn fail_individual_approval_if_done_many_times() {
                 destination_chain: message_info.leaf.message.destination_chain.clone(),
             };
 
-            if find_event_cpi(&expected_event, &inner_ixs) {
+            if contains_event_cpi(&expected_event, &inner_ixs) {
                 events_counter += 1;
             }
         }

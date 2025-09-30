@@ -68,7 +68,7 @@ async fn successfully_approves_messages() {
             .first()
             .cloned()
             .unwrap();
-        assert!(inner_ixs.len() > 0);
+        assert!(!inner_ixs.is_empty());
 
         let expected_event = MessageApprovedEvent {
             command_id,
@@ -112,6 +112,7 @@ async fn successfully_approves_messages() {
 }
 
 #[tokio::test]
+#[allow(clippy::too_many_lines)]
 async fn fail_individual_approval_if_done_many_times() {
     // Setup
     let mut metadata = SolanaAxelarIntegration::builder()

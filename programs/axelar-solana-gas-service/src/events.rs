@@ -1,6 +1,6 @@
 //! Events emitted by the Axelar Solana Gas service
 
-use event_cpi::Discriminator;
+use anchor_discriminators::Discriminator;
 use event_cpi_macros::event;
 use solana_program::pubkey::Pubkey;
 

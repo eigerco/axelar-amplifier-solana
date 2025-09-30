@@ -929,6 +929,7 @@ dependencies = [
 name = "axelar-solana-memo-program"
 version = "0.1.0"
 dependencies = [
+ "anchor-discriminators-macros",
  "anyhow",
  "axelar-solana-encoding",
  "axelar-solana-gas-service",

@@ -222,8 +222,7 @@ impl SolanaAxelarIntegrationMetadata {
         verifier_set: &VerifierSet,
         payload: Payload,
     ) -> ExecuteData {
-        let payload_hash =
-            hash_payload(&self.domain_separator, verifier_set, payload.clone()).unwrap();
+        let payload_hash = hash_payload(&self.domain_separator, payload.clone()).unwrap();
         let signatures = {
             signers
                 .signers

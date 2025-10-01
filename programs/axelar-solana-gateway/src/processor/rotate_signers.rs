@@ -89,6 +89,7 @@ impl Processor {
         // data itself. New verifier set merkle root is used directly as the payload hash.
         assert_valid_signature_verification_pda(
             &new_verifier_set_merkle_root,
+            &session.signature_verification.signing_verifier_set_hash,
             session.bump,
             verification_session_account.key,
         )?;

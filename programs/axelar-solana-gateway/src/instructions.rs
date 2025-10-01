@@ -400,7 +400,8 @@ pub fn initialize_payload_verification_session(
     payload_merkle_root: [u8; 32],
     signing_verifier_set_hash: [u8; 32],
 ) -> Result<Instruction, ProgramError> {
-    let (verification_session_pda, _) = crate::get_signature_verification_pda(&payload_merkle_root);
+    let (verification_session_pda, _) =
+        crate::get_signature_verification_pda(&payload_merkle_root, &signing_verifier_set_hash);
 
     let accounts = vec![
         AccountMeta::new(payer, true),
@@ -430,12 +431,10 @@ pub fn initialize_payload_verification_session(
 pub fn verify_signature(
     gateway_config_pda: Pubkey,
     verifier_set_tracker_pda: Pubkey,
+    verification_session_pda: Pubkey,
     payload_merkle_root: [u8; 32],
     verifier_info: SigningVerifierSetInfo,
 ) -> Result<Instruction, ProgramError> {
-    let (verification_session_pda, _bump) =
-        crate::get_signature_verification_pda(&payload_merkle_root);
-
     let accounts = vec![
         AccountMeta::new_readonly(gateway_config_pda, false),
         AccountMeta::new(verification_session_pda, false),

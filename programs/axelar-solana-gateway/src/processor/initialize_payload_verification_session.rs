@@ -80,7 +80,8 @@ impl Processor {
 
         // Check: Verification PDA can be derived from provided seeds.
         // using canonical bump for the session account
-        let (verification_session_pda, bump) = crate::get_signature_verification_pda(&merkle_root);
+        let (verification_session_pda, bump) =
+            crate::get_signature_verification_pda(&merkle_root, &signing_verifier_set_hash);
         if verification_session_pda != *verification_session_account.key {
             return Err(GatewayError::InvalidVerificationSessionPDA.into());
         }
@@ -95,6 +96,7 @@ impl Processor {
         let signers_seeds = &[
             seed_prefixes::SIGNATURE_VERIFICATION_SEED,
             &merkle_root,
+            &signing_verifier_set_hash,
             &[bump],
         ];
 

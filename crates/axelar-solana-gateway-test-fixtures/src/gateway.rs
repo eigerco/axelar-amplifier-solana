@@ -151,9 +151,15 @@ impl SolanaAxelarIntegrationMetadata {
 
         for signature_leaves in &execute_data.signing_verifier_set_leaves {
             // Verify the signature
+            let (verification_session_pda, _) =
+                axelar_solana_gateway::get_signature_verification_pda(
+                    &execute_data.payload_merkle_root,
+                    &execute_data.signing_verifier_set_merkle_root,
+                );
             let ix = axelar_solana_gateway::instructions::verify_signature(
                 gateway_config_pda,
                 verifier_set_tracker_pda,
+                verification_session_pda,
                 execute_data.payload_merkle_root,
                 signature_leaves.clone(),
             )
@@ -170,6 +176,7 @@ impl SolanaAxelarIntegrationMetadata {
         // Check that the PDA contains the expected data
         let (verification_pda, _bump) = axelar_solana_gateway::get_signature_verification_pda(
             &execute_data.payload_merkle_root,
+            &execute_data.signing_verifier_set_merkle_root,
         );
         Ok(verification_pda)
     }

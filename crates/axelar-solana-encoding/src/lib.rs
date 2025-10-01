@@ -147,12 +147,8 @@ fn hash_payload_internal(
 ) -> Result<([u8; 32], MerkleisedPayload), EncodingError> {
     let (payload_merkle_root, payload_items) = match payload {
         Payload::Messages(messages) => {
-            let leaves = types::messages::merkle_tree_leaves(
-                messages,
-                domain_separator,
-                signing_verifier_set_merkle_root,
-            )?
-            .collect::<Vec<_>>();
+            let leaves = types::messages::merkle_tree_leaves(messages, domain_separator)?
+                .collect::<Vec<_>>();
             let messages_merkle_tree = merkle_tree::<NativeHasher, MessageLeaf>(leaves.iter());
             let messages_merkle_root = messages_merkle_tree
                 .root()

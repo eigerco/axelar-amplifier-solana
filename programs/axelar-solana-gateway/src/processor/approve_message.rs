@@ -98,13 +98,6 @@ impl Processor {
             return Err(GatewayError::SigningSessionNotValid.into());
         }
 
-        // Check: message signing verifier set matches the verification session verifier set
-        if merkleised_message.leaf.signing_verifier_set
-            != session.signature_verification.signing_verifier_set_hash
-        {
-            return Err(GatewayError::InvalidVerificationSessionPDA.into());
-        }
-
         // Check: message domain separator matches the gateway's domain separator
         if merkleised_message.leaf.domain_separator != gateway_config.domain_separator {
             return Err(GatewayError::InvalidDomainSeparator.into());

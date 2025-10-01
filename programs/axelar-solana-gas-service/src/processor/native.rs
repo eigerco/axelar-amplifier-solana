@@ -30,7 +30,6 @@ pub(crate) fn process_pay_native_for_contract_call(
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    let (accounts, _signer_pubkeys) = accounts.split_at(5);
     let accounts = &mut accounts.iter();
     let sender = next_account_info(accounts)?;
     let config_pda = next_account_info(accounts)?;
@@ -84,7 +83,6 @@ pub(crate) fn add_native_gas(
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    let (accounts, _signer_pubkeys) = accounts.split_at(5);
     let accounts = &mut accounts.iter();
     let sender = next_account_info(accounts)?;
     let config_pda = next_account_info(accounts)?;

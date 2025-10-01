@@ -403,10 +403,14 @@ pub fn initialize_payload_verification_session(
     let (verification_session_pda, _) =
         crate::get_signature_verification_pda(&payload_merkle_root, &signing_verifier_set_hash);
 
+    let (verifier_set_tracker_pda, _) =
+        crate::get_verifier_set_tracker_pda(signing_verifier_set_hash);
+
     let accounts = vec![
         AccountMeta::new(payer, true),
         AccountMeta::new_readonly(gateway_config_pda, false),
         AccountMeta::new(verification_session_pda, false),
+        AccountMeta::new(verifier_set_tracker_pda, false),
         AccountMeta::new_readonly(solana_program::system_program::id(), false),
     ];
 

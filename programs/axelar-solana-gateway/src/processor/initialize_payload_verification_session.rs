@@ -9,8 +9,12 @@ use solana_program::system_program;
 use super::Processor;
 use crate::error::GatewayError;
 use crate::state::signature_verification_pda::SignatureVerificationSessionData;
+use crate::state::verifier_set_tracker::VerifierSetTracker;
 use crate::state::GatewayConfig;
-use crate::{assert_valid_gateway_root_pda, seed_prefixes};
+use crate::{
+    assert_valid_gateway_root_pda, assert_valid_verifier_set_tracker_pda,
+    get_verifier_set_tracker_pda, seed_prefixes,
+};
 
 impl Processor {
     /// Initializes a signature verification session PDA account for a given Axelar payload (former
@@ -47,6 +51,7 @@ impl Processor {
         let payer = next_account_info(accounts_iter)?;
         let gateway_root_pda = next_account_info(accounts_iter)?;
         let verification_session_account = next_account_info(accounts_iter)?;
+        let verifier_set_tracker_account = next_account_info(accounts_iter)?;
         let system_program = next_account_info(accounts_iter)?;
 
         // Check payer account requirements
@@ -77,6 +82,32 @@ impl Processor {
         let gateway_config =
             GatewayConfig::read(&data).ok_or(GatewayError::BytemuckDataLenInvalid)?;
         assert_valid_gateway_root_pda(gateway_config.bump, gateway_root_pda.key)?;
+
+        // Check: Signing verifier set is valid and sufficiently recent
+        {
+            let (expected_verifier_set_tracker_pda, _) =
+                get_verifier_set_tracker_pda(signing_verifier_set_hash);
+            if *verifier_set_tracker_account.key != expected_verifier_set_tracker_pda {
+                return Err(GatewayError::InvalidVerifierSetTrackerProvided.into());
+            }
+
+            verifier_set_tracker_account
+                .check_initialized_pda_without_deserialization(program_id)?;
+            let verifier_set_data = verifier_set_tracker_account.try_borrow_data()?;
+            let verifier_set_tracker = VerifierSetTracker::read(&verifier_set_data)
+                .ok_or(GatewayError::BytemuckDataLenInvalid)?;
+            assert_valid_verifier_set_tracker_pda(
+                verifier_set_tracker,
+                verifier_set_tracker_account.key,
+            )?;
+            // Check: Verifier set isn't expired
+            gateway_config.assert_valid_epoch(verifier_set_tracker.epoch)?;
+
+            // Check: Verifier set hash matches what we expect
+            if verifier_set_tracker.verifier_set_hash != signing_verifier_set_hash {
+                return Err(GatewayError::InvalidVerifierSetTrackerProvided.into());
+            }
+        }
 
         // Check: Verification PDA can be derived from provided seeds.
         // using canonical bump for the session account

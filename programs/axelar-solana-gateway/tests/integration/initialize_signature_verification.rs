@@ -1,10 +1,14 @@
+use axelar_solana_encoding::hasher::NativeHasher;
+use axelar_solana_encoding::types::verifier_set::verifier_set_hash;
 use axelar_solana_gateway::get_gateway_root_config_pda;
 use axelar_solana_gateway::state::signature_verification::SignatureVerification;
-use axelar_solana_gateway_test_fixtures::gateway::random_bytes;
+use axelar_solana_gateway_test_fixtures::gateway::{make_verifier_set, random_bytes};
 use axelar_solana_gateway_test_fixtures::SolanaAxelarIntegration;
 use bytemuck::Zeroable;
 use solana_program_test::tokio;
+use solana_sdk::instruction::InstructionError;
 use solana_sdk::signer::Signer;
+use solana_sdk::transaction::TransactionError;
 
 #[tokio::test]
 async fn test_initialize_payload_verification_session() {
@@ -95,4 +99,46 @@ async fn test_cannot_initialize_pda_twice() {
         tx_result_second.result.is_err(),
         "Second initialization should fail"
     );
+}
+
+#[tokio::test]
+async fn test_cannot_initialize_with_unknown_verifier_set() {
+    // Setup
+    let mut metadata = SolanaAxelarIntegration::builder()
+        .initial_signer_weights(vec![42])
+        .build()
+        .setup()
+        .await;
+
+    // Create an unknown verifier set that hasn't been registered with the gateway
+    let unknown_verifier_set = make_verifier_set(&[100], 999, metadata.domain_separator);
+    let unknown_verifier_set_hash = verifier_set_hash::<NativeHasher>(
+        &unknown_verifier_set.verifier_set(),
+        &metadata.domain_separator,
+    )
+    .unwrap();
+
+    // Attempt to initialize payload verification session with unknown verifier set
+    let payload_merkle_root = random_bytes();
+    let gateway_config_pda = get_gateway_root_config_pda().0;
+    let ix = axelar_solana_gateway::instructions::initialize_payload_verification_session(
+        metadata.payer.pubkey(),
+        gateway_config_pda,
+        payload_merkle_root,
+        unknown_verifier_set_hash,
+    )
+    .unwrap();
+
+    let tx_result = metadata.send_tx(&[ix]).await.unwrap_err();
+
+    // Verify the transaction fails with the expected error.
+    // The verifier set tracker PDA doesn't exist for unknown verifier sets,
+    // causing InsufficientFunds error when trying to access the non-existent account.
+    match &tx_result.result {
+        Err(TransactionError::InstructionError(_, InstructionError::InsufficientFunds)) => {}
+        _ => panic!(
+            "Expected InsufficientFunds error for unknown verifier set, got: {:?}",
+            tx_result.result
+        ),
+    }
 }

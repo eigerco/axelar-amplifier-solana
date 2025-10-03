@@ -1,6 +1,6 @@
-use crate::error::GatewayError;
 use crate::state::incoming_message::IncomingMessage;
 use crate::state::message_payload::MutMessagePayload;
+use crate::{assert_initialized_and_valid_gateway_root_pda, error::GatewayError};
 
 use super::Processor;
 use program_utils::{
@@ -58,8 +58,8 @@ impl Processor {
             return Err(ProgramError::InvalidAccountData);
         }
 
-        // Check: Gateway root PDA
-        gateway_root_pda.check_initialized_pda_without_deserialization(program_id)?;
+            // Check: Gateway root PDA
+        assert_initialized_and_valid_gateway_root_pda(gateway_root_pda)?;
 
         // Check: System Program
         validate_system_account_key(system_program.key)?;

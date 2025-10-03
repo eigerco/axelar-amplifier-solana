@@ -461,7 +461,6 @@ pub fn validate_message(
     signing_pda: &Pubkey,
     message: Message,
 ) -> Result<Instruction, ProgramError> {
-
     let gateway_root_pda = get_gateway_root_config_pda().0;
 
     let accounts = vec![

@@ -44,7 +44,7 @@ impl Processor {
         let incoming_message_pda = next_account_info(accounts_iter)?;
         let caller = next_account_info(accounts_iter)?;
         let gateway_root_pda = next_account_info(accounts_iter)?;
-        
+
         // Check: Gateway Root PDA is initialized.
         assert_initialized_and_valid_gateway_root_pda(gateway_root_pda)?;
 

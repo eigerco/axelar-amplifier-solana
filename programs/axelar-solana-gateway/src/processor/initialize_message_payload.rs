@@ -58,7 +58,7 @@ impl Processor {
             return Err(ProgramError::InvalidAccountData);
         }
 
-            // Check: Gateway root PDA
+        // Check: Gateway root PDA
         assert_initialized_and_valid_gateway_root_pda(gateway_root_pda)?;
 
         // Check: System Program

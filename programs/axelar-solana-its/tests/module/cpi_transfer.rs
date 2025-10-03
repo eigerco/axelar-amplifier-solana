@@ -3,7 +3,6 @@ use axelar_solana_gateway_test_fixtures::{
     gateway::{get_gateway_events, ProgramInvocationState},
 };
 use axelar_solana_its::state::token_manager::Type;
-use axelar_solana_memo_program::get_counter_pda;
 use evm_contracts_test_suite::ethers::signers::Signer as EvmSigner;
 use interchain_token_transfer_gmp::GMPPayload;
 use solana_program::pubkey::Pubkey;
@@ -28,8 +27,8 @@ struct TestSetup {
     gas_service_root_pda: Pubkey,
 }
 
-/// Initialize common test components and PDAs
-fn setup_test_environment(ctx: &ItsTestContext) -> TestSetup {
+/// Initialize test components with CPI caller counter PDA  
+fn setup_cpi_caller_environment(ctx: &ItsTestContext) -> TestSetup {
     let payer = ctx.solana_wallet;
     let token_id = ctx.deployed_interchain_token;
 
@@ -37,7 +36,7 @@ fn setup_test_environment(ctx: &ItsTestContext) -> TestSetup {
     let token_manager_pda = axelar_solana_its::find_token_manager_pda(&its_root_pda, &token_id).0;
     let token_mint = axelar_solana_its::find_interchain_token_pda(&its_root_pda, &token_id).0;
 
-    let (counter_pda, _) = get_counter_pda();
+    let (counter_pda, _) = axelar_solana_its_cpi_caller::get_counter_pda();
     let token_program = spl_token_2022::id();
     let counter_pda_ata =
         get_associated_token_address_with_program_id(&counter_pda, &token_mint, &token_program);
@@ -62,12 +61,19 @@ fn setup_test_environment(ctx: &ItsTestContext) -> TestSetup {
     }
 }
 
-/// Create ATA and mint tokens to the counter PDA
-async fn setup_counter_pda_with_tokens(
+/// Initialize the CPI caller counter and create ATA and mint tokens to the counter PDA
+async fn setup_cpi_caller_counter_pda_with_tokens(
     ctx: &mut ItsTestContext,
     setup: &TestSetup,
     mint_amount: u64,
 ) {
+    // Initialize the CPI caller counter PDA
+    let counter_pda_with_bump = axelar_solana_its_cpi_caller::get_counter_pda();
+    let init_ix =
+        axelar_solana_its_cpi_caller::instruction::initialize(&setup.payer, &counter_pda_with_bump)
+            .unwrap();
+    ctx.send_solana_tx(&[init_ix]).await.unwrap();
+
     // Create the counter PDA's ATA
     let create_ata_ix = spl_associated_token_account::instruction::create_associated_token_account(
         &setup.payer,
@@ -156,20 +162,20 @@ fn verify_gateway_event_and_source(
     gmp_payload
 }
 
-/// Test that demonstrates the memo program can initiate interchain transfers through its PDA
+/// Test that demonstrates the CPI caller can initiate interchain transfers through its PDA
 #[test_context(ItsTestContext)]
 #[tokio::test]
-async fn test_memo_cpi_transfer(ctx: &mut ItsTestContext) {
-    let setup = setup_test_environment(ctx);
+async fn test_cpi_transfer_from_cpi_caller(ctx: &mut ItsTestContext) {
+    let setup = setup_cpi_caller_environment(ctx);
     verify_token_manager_type(ctx, &setup.token_manager_pda).await;
-    setup_counter_pda_with_tokens(ctx, &setup, 1000u64).await;
+    setup_cpi_caller_counter_pda_with_tokens(ctx, &setup, 1000u64).await;
 
     let destination_chain = ctx.evm_chain_name.clone();
     let destination_address = ctx.evm_signer.wallet.address().as_bytes().to_vec();
     let transfer_amount = 100u64;
     let gas_value = 0u128;
 
-    let send_transfer = axelar_solana_memo_program::instruction::send_interchain_transfer(
+    let send_transfer = axelar_solana_its_cpi_caller::instruction::send_interchain_transfer(
         &ctx.solana_wallet,
         &setup.counter_pda,
         &setup.its_root_pda,
@@ -191,7 +197,7 @@ async fn test_memo_cpi_transfer(ctx: &mut ItsTestContext) {
 
     verify_gateway_event_and_source(
         &tx,
-        &axelar_solana_memo_program::ID.to_bytes(),
+        &axelar_solana_its_cpi_caller::ID.to_bytes(),
         transfer_amount,
     );
 }
@@ -249,7 +255,7 @@ async fn test_cpi_transfer_fails_with_non_pda_account(ctx: &mut ItsTestContext) 
         token_mint,
         token_program,
         0u64,
-        axelar_solana_memo_program::ID,
+        axelar_solana_its_cpi_caller::ID,
         vec![vec![]],
     )
     .unwrap();
@@ -264,14 +270,14 @@ async fn test_cpi_transfer_fails_with_non_pda_account(ctx: &mut ItsTestContext) 
 }
 
 /// Test that CPI transfers fail when inconsistent seeds are provided
-/// This test uses the memo program's special instruction that intentionally provides wrong seeds
+/// This test uses the CPI caller's special instruction that intentionally provides wrong seeds
 #[test_context(ItsTestContext)]
 #[tokio::test]
 async fn test_cpi_transfer_fails_with_inconsistent_seeds(ctx: &mut ItsTestContext) {
-    let setup = setup_test_environment(ctx);
+    let setup = setup_cpi_caller_environment(ctx);
 
     // Setup counter PDA with tokens
-    setup_counter_pda_with_tokens(ctx, &setup, 1000u64).await;
+    setup_cpi_caller_counter_pda_with_tokens(ctx, &setup, 1000u64).await;
 
     // Prepare transfer parameters
     let destination_chain = ctx.evm_chain_name.clone();
@@ -279,9 +285,9 @@ async fn test_cpi_transfer_fails_with_inconsistent_seeds(ctx: &mut ItsTestContex
     let transfer_amount = 100u64;
     let gas_value = 0u128;
 
-    // Use the special memo instruction that provides wrong seeds
+    // Use the special CPI caller instruction that provides wrong seeds
     let transfer_with_wrong_seeds =
-        axelar_solana_memo_program::instruction::send_interchain_transfer_with_wrong_seeds(
+        axelar_solana_its_cpi_caller::instruction::send_interchain_transfer_with_wrong_seeds(
             &ctx.solana_wallet,
             &setup.counter_pda,
             &setup.its_root_pda,
@@ -305,14 +311,14 @@ async fn test_cpi_transfer_fails_with_inconsistent_seeds(ctx: &mut ItsTestContex
     assert_msg_present_in_logs(result.unwrap_err(), "PDA derivation mismatch");
 }
 
-/// Test that demonstrates the memo program can initiate CallContractWithInterchainToken through its PDA
+/// Test that demonstrates the CPI caller can initiate CallContractWithInterchainToken through its PDA
 /// This sends tokens along with additional data to execute on the destination contract
 #[test_context(ItsTestContext)]
 #[tokio::test]
-async fn test_memo_cpi_call_contract_with_interchain_token(ctx: &mut ItsTestContext) {
-    let setup = setup_test_environment(ctx);
+async fn test_its_cpi_caller_call_contract_with_interchain_token(ctx: &mut ItsTestContext) {
+    let setup = setup_cpi_caller_environment(ctx);
     verify_token_manager_type(ctx, &setup.token_manager_pda).await;
-    setup_counter_pda_with_tokens(ctx, &setup, 1000u64).await;
+    setup_cpi_caller_counter_pda_with_tokens(ctx, &setup, 1000u64).await;
 
     let destination_chain = ctx.evm_chain_name.clone();
     let destination_address = ctx.evm_signer.wallet.address().as_bytes().to_vec();
@@ -320,9 +326,9 @@ async fn test_memo_cpi_call_contract_with_interchain_token(ctx: &mut ItsTestCont
     let gas_value = 0u128;
     let custom_data = b"execute_special_function_with_params".to_vec();
 
-    // Create the CallContractWithInterchainToken instruction through memo program
+    // Create the CallContractWithInterchainToken instruction through CPI caller
     let call_contract_transfer =
-        axelar_solana_memo_program::instruction::call_contract_with_interchain_token(
+        axelar_solana_its_cpi_caller::instruction::call_contract_with_interchain_token(
             &ctx.solana_wallet,
             &setup.counter_pda,
             &setup.its_root_pda,
@@ -345,7 +351,7 @@ async fn test_memo_cpi_call_contract_with_interchain_token(ctx: &mut ItsTestCont
 
     let gmp_payload = verify_gateway_event_and_source(
         &tx,
-        &axelar_solana_memo_program::ID.to_bytes(),
+        &axelar_solana_its_cpi_caller::ID.to_bytes(),
         transfer_amount,
     );
 

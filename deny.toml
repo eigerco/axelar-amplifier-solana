@@ -184,6 +184,10 @@ crate = "axelar-solana-memo-program"
 expression = "MIT"
 license-files = []
 [[licenses.clarify]]
+crate = "axelar-solana-its-cpi-caller"
+expression = "MIT"
+license-files = []
+[[licenses.clarify]]
 crate = "program-utils"
 expression = "MIT"
 license-files = []

@@ -904,6 +904,7 @@ dependencies = [
  "axelar-solana-gas-service",
  "axelar-solana-gateway",
  "axelar-solana-gateway-test-fixtures",
+ "axelar-solana-its-cpi-caller",
  "axelar-solana-memo-program",
  "bitflags 2.9.0",
  "borsh 1.5.7",
@@ -926,13 +927,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "axelar-solana-its-cpi-caller"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axelar-solana-gas-service",
+ "axelar-solana-gateway",
+ "axelar-solana-gateway-test-fixtures",
+ "axelar-solana-its",
+ "borsh 1.5.7",
+ "ethers-core",
+ "evm-contracts-test-suite",
+ "pretty_assertions",
+ "program-utils",
+ "rstest",
+ "serde_json",
+ "solana-program",
+ "solana-program-test",
+ "solana-sdk",
+ "spl-associated-token-account 6.0.0",
+ "spl-token 6.0.0",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "axelar-solana-memo-program"
 version = "0.1.0"
 dependencies = [
  "anchor-discriminators-macros",
  "anyhow",
  "axelar-solana-encoding",
- "axelar-solana-gas-service",
  "axelar-solana-gateway",
  "axelar-solana-gateway-test-fixtures",
  "axelar-solana-its",

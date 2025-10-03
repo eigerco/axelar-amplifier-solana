@@ -1,11 +1,7 @@
 //! Processor for [`TokenManager`] related requests.
 
 use event_cpi_macros::{emit_cpi, event_cpi_accounts};
-use program_utils::next_optional_account_info;
-use program_utils::{
-    pda::BorshPda, validate_rent_key, validate_spl_associated_token_account_key,
-    validate_system_account_key,
-};
+use program_utils::{pda::BorshPda, validate_system_account_key};
 use role_management::processor::{
     ensure_signer_roles, RoleAddAccounts, RoleRemoveAccounts, RoleTransferWithProposalAccounts,
 };
@@ -18,18 +14,16 @@ use solana_program::program_error::ProgramError;
 use solana_program::program_option::COption;
 use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
-use spl_associated_token_account::get_associated_token_address_with_program_id;
-use spl_token_2022::check_spl_token_program_account;
 use spl_token_2022::extension::{BaseStateWithExtensions, ExtensionType, StateWithExtensions};
 use spl_token_2022::instruction::AuthorityType;
 use spl_token_2022::state::Mint;
 
+use crate::accounts::DeployTokenManagerAccounts;
+use event_cpi::EventAccounts;
 use crate::state::token_manager::{self, TokenManager};
 use crate::state::InterchainTokenService;
-use crate::{assert_valid_its_root_pda, events, EventAccounts, Validate};
-use crate::{assert_valid_token_manager_pda, seed_prefixes, FromAccountInfoSlice, Roles};
-
-use super::gmp::ItsExecuteAccounts;
+use crate::{assert_valid_its_root_pda, events};
+use crate::{assert_valid_token_manager_pda, seed_prefixes, Roles};
 
 pub(crate) fn set_flow_limit<'a>(
     payer: &'a AccountInfo<'a>,
@@ -356,121 +350,6 @@ pub(crate) fn handover_mint_authority(
     }?;
 
     Ok(())
-}
-
-#[derive(Debug)]
-pub(crate) struct DeployTokenManagerAccounts<'a> {
-    pub(crate) payer: &'a AccountInfo<'a>,
-    pub(crate) system_account: &'a AccountInfo<'a>,
-    pub(crate) its_root_pda: &'a AccountInfo<'a>,
-    pub(crate) token_manager_pda: &'a AccountInfo<'a>,
-    pub(crate) token_mint: &'a AccountInfo<'a>,
-    pub(crate) token_manager_ata: &'a AccountInfo<'a>,
-    pub(crate) token_program: &'a AccountInfo<'a>,
-    pub(crate) ata_program: &'a AccountInfo<'a>,
-    pub(crate) rent_sysvar: &'a AccountInfo<'a>,
-    pub(crate) operator: Option<&'a AccountInfo<'a>>,
-    pub(crate) operator_roles_pda: Option<&'a AccountInfo<'a>>,
-    pub(crate) __event_cpi_authority_info: &'a AccountInfo<'a>,
-    pub(crate) __event_cpi_program_account: &'a AccountInfo<'a>,
-}
-
-impl Validate for DeployTokenManagerAccounts<'_> {
-    fn validate(&self) -> Result<(), ProgramError> {
-        validate_system_account_key(self.system_account.key)?;
-        check_spl_token_program_account(self.token_program.key)?;
-        validate_spl_associated_token_account_key(self.ata_program.key)?;
-        validate_rent_key(self.rent_sysvar.key)?;
-
-        if !self.payer.is_signer {
-            return Err(ProgramError::MissingRequiredSignature);
-        }
-
-        if self.token_program.key != self.token_mint.owner {
-            msg!("Mint and program account mismatch");
-            return Err(ProgramError::IncorrectProgramId);
-        }
-
-        if &get_associated_token_address_with_program_id(
-            self.token_manager_pda.key,
-            self.token_mint.key,
-            self.token_program.key,
-        ) != self.token_manager_ata.key
-        {
-            msg!("Wrong ata account key");
-            return Err(ProgramError::InvalidAccountData);
-        }
-
-        Ok(())
-    }
-}
-
-impl<'a> EventAccounts<'a> for DeployTokenManagerAccounts<'a> {
-    fn event_accounts(&self) -> [&'a AccountInfo<'a>; 2] {
-        [
-            self.__event_cpi_authority_info,
-            self.__event_cpi_program_account,
-        ]
-    }
-}
-
-impl<'a> TryFrom<ItsExecuteAccounts<'a>> for DeployTokenManagerAccounts<'a> {
-    type Error = ProgramError;
-
-    fn try_from(value: ItsExecuteAccounts<'a>) -> Result<Self, Self::Error> {
-        let remaining_accounts_iter = &mut value.remaining_accounts.iter();
-
-        Ok(Self {
-            payer: value.payer,
-            system_account: value.system_program,
-            its_root_pda: value.its_root_pda,
-            token_manager_pda: value.token_manager_pda,
-            token_mint: value.token_mint,
-            token_manager_ata: value.token_manager_ata,
-            token_program: value.token_program,
-            ata_program: value.ata_program,
-            rent_sysvar: value.rent_sysvar,
-            operator: next_optional_account_info(remaining_accounts_iter, &crate::ID)?,
-            operator_roles_pda: next_optional_account_info(remaining_accounts_iter, &crate::ID)?,
-            __event_cpi_authority_info: value.__event_cpi_authority_info,
-            __event_cpi_program_account: value.__event_cpi_program_account,
-        })
-    }
-}
-
-impl<'a> FromAccountInfoSlice<'a> for DeployTokenManagerAccounts<'a> {
-    type Context = Option<&'a AccountInfo<'a>>;
-
-    fn extract_accounts(
-        accounts: &'a [AccountInfo<'a>],
-        maybe_payer: &Self::Context,
-    ) -> Result<Self, ProgramError>
-    where
-        Self: Sized + Validate,
-    {
-        let accounts_iter = &mut accounts.iter();
-        let payer = if let Some(payer) = maybe_payer {
-            payer
-        } else {
-            next_account_info(accounts_iter)?
-        };
-
-        Ok(Self {
-            payer,
-            system_account: next_account_info(accounts_iter)?,
-            its_root_pda: next_account_info(accounts_iter)?,
-            token_manager_pda: next_account_info(accounts_iter)?,
-            token_mint: next_account_info(accounts_iter)?,
-            token_manager_ata: next_account_info(accounts_iter)?,
-            token_program: next_account_info(accounts_iter)?,
-            ata_program: next_account_info(accounts_iter)?,
-            rent_sysvar: next_account_info(accounts_iter)?,
-            operator: next_optional_account_info(accounts_iter, &crate::ID)?,
-            operator_roles_pda: next_optional_account_info(accounts_iter, &crate::ID)?,
-            __event_cpi_authority_info: next_account_info(accounts_iter)?,
-            __event_cpi_program_account: next_account_info(accounts_iter)?,
-        })
-    }
 }
 
 pub(crate) fn process_add_flow_limiter<'a>(accounts: &'a [AccountInfo<'a>]) -> ProgramResult {

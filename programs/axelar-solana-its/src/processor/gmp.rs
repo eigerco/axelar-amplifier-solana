@@ -4,125 +4,31 @@ use axelar_solana_gateway::executable::validate_with_gmp_metadata;
 use axelar_solana_gateway::state::message_payload::ImmutMessagePayload;
 use interchain_token_transfer_gmp::{GMPPayload, SendToHub};
 use itertools::{self, Itertools};
-use program_utils::{pda::BorshPda, validate_system_account_key};
-use solana_program::account_info::{next_account_info, AccountInfo};
+use program_utils::pda::BorshPda;
+use solana_program::account_info::AccountInfo;
 use solana_program::entrypoint::ProgramResult;
 use solana_program::msg;
 use solana_program::program::invoke;
 use solana_program::program::invoke_signed;
 use solana_program::program_error::ProgramError;
 
+use crate::accounts::CallContractAccounts;
+use crate::accounts::ExecuteAccounts;
+use crate::instruction;
 use crate::processor::interchain_token;
 use crate::processor::interchain_transfer::process_inbound_transfer;
 use crate::processor::link_token;
 use crate::state::token_manager::TokenManager;
 use crate::state::InterchainTokenService;
 use crate::{
-    assert_its_not_paused, assert_valid_its_root_pda, check_program_account, EventAccounts,
-    Validate, ITS_HUB_CHAIN_NAME,
+    assert_its_not_paused, assert_valid_its_root_pda, check_program_account, ITS_HUB_CHAIN_NAME,
 };
-use crate::{instruction, FromAccountInfoSlice};
-
-pub(crate) struct ItsExecuteAccounts<'a> {
-    pub(crate) payer: &'a AccountInfo<'a>,
-    pub(crate) gateway_approved_message_pda: &'a AccountInfo<'a>,
-    pub(crate) gateway_payload_account: &'a AccountInfo<'a>,
-    pub(crate) gateway_signing_pda: &'a AccountInfo<'a>,
-    pub(crate) gateway_event_authority: &'a AccountInfo<'a>,
-    pub(crate) gateway_program_id: &'a AccountInfo<'a>,
-    pub(crate) system_program: &'a AccountInfo<'a>,
-    pub(crate) its_root_pda: &'a AccountInfo<'a>,
-    pub(crate) token_manager_pda: &'a AccountInfo<'a>,
-    pub(crate) token_mint: &'a AccountInfo<'a>,
-    pub(crate) token_manager_ata: &'a AccountInfo<'a>,
-    pub(crate) token_program: &'a AccountInfo<'a>,
-    pub(crate) ata_program: &'a AccountInfo<'a>,
-    pub(crate) rent_sysvar: &'a AccountInfo<'a>,
-    pub(crate) __event_cpi_authority_info: &'a AccountInfo<'a>,
-    pub(crate) __event_cpi_program_account: &'a AccountInfo<'a>,
-    // Remaining accounts are payload specific
-    pub(crate) remaining_accounts: &'a [AccountInfo<'a>],
-}
-
-impl<'a> ItsExecuteAccounts<'a> {
-    fn gateway_validation_accounts(&self) -> Vec<AccountInfo<'a>> {
-        vec![
-            self.payer.clone(),
-            self.gateway_approved_message_pda.clone(),
-            self.gateway_payload_account.clone(),
-            self.gateway_signing_pda.clone(),
-            self.gateway_event_authority.clone(),
-            self.gateway_program_id.clone(),
-        ]
-    }
-
-    fn its_accounts(&self) -> Vec<AccountInfo<'a>> {
-        let mut accounts = vec![
-            self.system_program.clone(),
-            self.its_root_pda.clone(),
-            self.token_manager_pda.clone(),
-            self.token_mint.clone(),
-            self.token_manager_ata.clone(),
-            self.token_program.clone(),
-            self.ata_program.clone(),
-            self.rent_sysvar.clone(),
-            self.__event_cpi_authority_info.clone(),
-            self.__event_cpi_program_account.clone(),
-        ];
-
-        accounts.extend(self.remaining_accounts.iter().cloned());
-
-        accounts
-    }
-}
-
-impl<'a> FromAccountInfoSlice<'a> for ItsExecuteAccounts<'a> {
-    type Context = ();
-
-    fn extract_accounts(
-        accounts: &'a [AccountInfo<'a>],
-        _context: &Self::Context,
-    ) -> Result<Self, ProgramError>
-    where
-        Self: Sized + Validate,
-    {
-        let accounts_iter = &mut accounts.iter();
-
-        Ok(Self {
-            payer: next_account_info(accounts_iter)?,
-            gateway_approved_message_pda: next_account_info(accounts_iter)?,
-            gateway_payload_account: next_account_info(accounts_iter)?,
-            gateway_signing_pda: next_account_info(accounts_iter)?,
-            gateway_event_authority: next_account_info(accounts_iter)?,
-            gateway_program_id: next_account_info(accounts_iter)?,
-            system_program: next_account_info(accounts_iter)?,
-            its_root_pda: next_account_info(accounts_iter)?,
-            token_manager_pda: next_account_info(accounts_iter)?,
-            token_mint: next_account_info(accounts_iter)?,
-            token_manager_ata: next_account_info(accounts_iter)?,
-            token_program: next_account_info(accounts_iter)?,
-            ata_program: next_account_info(accounts_iter)?,
-            rent_sysvar: next_account_info(accounts_iter)?,
-            __event_cpi_authority_info: next_account_info(accounts_iter)?,
-            __event_cpi_program_account: next_account_info(accounts_iter)?,
-            remaining_accounts: accounts_iter.as_slice(),
-        })
-    }
-}
-
-impl<'a> Validate for ItsExecuteAccounts<'a> {
-    fn validate(&self) -> Result<(), ProgramError> {
-        validate_system_account_key(self.system_program.key)?;
-
-        Ok(())
-    }
-}
 
 pub(crate) fn process_execute<'a>(
     accounts: &'a [AccountInfo<'a>],
     message: Message,
 ) -> ProgramResult {
-    let its_execute_accounts = ItsExecuteAccounts::from_account_info_slice(accounts, &())?;
+    let its_execute_accounts = ExecuteAccounts::try_from(accounts)?;
     validate_with_gmp_metadata(
         &its_execute_accounts.gateway_validation_accounts(),
         &message,
@@ -160,9 +66,12 @@ pub(crate) fn process_execute<'a>(
     validate_its_accounts(&its_execute_accounts.its_accounts(), &payload)?;
 
     match payload {
-        GMPPayload::InterchainTransfer(transfer) => {
-            process_inbound_transfer(message, its_execute_accounts, &transfer, inner.source_chain)
-        }
+        GMPPayload::InterchainTransfer(transfer) => process_inbound_transfer(
+            its_execute_accounts.try_into()?,
+            message,
+            &transfer,
+            inner.source_chain,
+        ),
         GMPPayload::DeployInterchainToken(deploy) => interchain_token::process_inbound_deploy(
             its_execute_accounts.try_into()?,
             deploy.token_id.0,
@@ -180,72 +89,9 @@ pub(crate) fn process_execute<'a>(
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct GmpAccounts<'a> {
-    pub(crate) gateway_root_account: &'a AccountInfo<'a>,
-    pub(crate) gateway_event_authority: &'a AccountInfo<'a>,
-    pub(crate) gateway_program_id: &'a AccountInfo<'a>,
-    pub(crate) gas_service_config_account: &'a AccountInfo<'a>,
-    pub(crate) gas_service_event_authority: &'a AccountInfo<'a>,
-    pub(crate) _gas_service: &'a AccountInfo<'a>,
-    pub(crate) system_program: &'a AccountInfo<'a>,
-    pub(crate) its_root_account: &'a AccountInfo<'a>,
-    pub(crate) call_contract_signing_account: &'a AccountInfo<'a>,
-    pub(crate) program_account: &'a AccountInfo<'a>,
-    pub(crate) __event_cpi_authority_info: &'a AccountInfo<'a>,
-    pub(crate) __event_cpi_program_account: &'a AccountInfo<'a>,
-}
-
-impl Validate for GmpAccounts<'_> {
-    fn validate(&self) -> Result<(), ProgramError> {
-        validate_system_account_key(self.system_program.key)?;
-        axelar_solana_gateway::check_program_account(*self.gateway_program_id.key)?;
-
-        Ok(())
-    }
-}
-
-impl<'a> FromAccountInfoSlice<'a> for GmpAccounts<'a> {
-    type Context = ();
-
-    fn extract_accounts(
-        accounts: &'a [AccountInfo<'a>],
-        _context: &Self::Context,
-    ) -> Result<Self, ProgramError>
-    where
-        Self: Sized + Validate,
-    {
-        let accounts_iter = &mut accounts.iter();
-
-        Ok(Self {
-            gateway_root_account: next_account_info(accounts_iter)?,
-            gateway_event_authority: next_account_info(accounts_iter)?,
-            gateway_program_id: next_account_info(accounts_iter)?,
-            gas_service_config_account: next_account_info(accounts_iter)?,
-            gas_service_event_authority: next_account_info(accounts_iter)?,
-            _gas_service: next_account_info(accounts_iter)?,
-            system_program: next_account_info(accounts_iter)?,
-            its_root_account: next_account_info(accounts_iter)?,
-            call_contract_signing_account: next_account_info(accounts_iter)?,
-            program_account: next_account_info(accounts_iter)?,
-            __event_cpi_authority_info: next_account_info(accounts_iter)?,
-            __event_cpi_program_account: next_account_info(accounts_iter)?,
-        })
-    }
-}
-
-impl<'a> EventAccounts<'a> for GmpAccounts<'a> {
-    fn event_accounts(&self) -> [&'a AccountInfo<'a>; 2] {
-        [
-            self.__event_cpi_authority_info,
-            self.__event_cpi_program_account,
-        ]
-    }
-}
-
-pub(crate) fn process_outbound<'a>(
+pub(crate) fn process_call_contract<'a>(
     payer: &'a AccountInfo<'a>,
-    accounts: &GmpAccounts<'a>,
+    accounts: &CallContractAccounts<'a>,
     payload: &GMPPayload,
     destination_chain: String,
     gas_value: u64,

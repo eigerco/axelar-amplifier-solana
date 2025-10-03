@@ -1064,8 +1064,6 @@ pub fn register_canonical_interchain_token(
         AccountMeta::new_readonly(token_program, false),
         AccountMeta::new_readonly(spl_associated_token_account::ID, false),
         AccountMeta::new_readonly(sysvar::rent::ID, false),
-        AccountMeta::new_readonly(crate::ID, false),
-        AccountMeta::new_readonly(crate::ID, false),
         AccountMeta::new_readonly(event_authority, false),
         AccountMeta::new_readonly(crate::ID, false),
     ];
@@ -1456,6 +1454,7 @@ pub fn register_custom_token(
         AccountMeta::new_readonly(sysvar::rent::ID, false),
     ];
 
+    // Add optional operator accounts (uses program_id as sentinel for None)
     if let Some(operator) = operator {
         let (operator_roles_pda, _) =
             role_management::find_user_roles_pda(&crate::ID, &token_manager_pda, &operator);
@@ -1466,6 +1465,7 @@ pub fn register_custom_token(
         accounts.push(AccountMeta::new_readonly(crate::ID, false));
     }
 
+    // Event CPI accounts
     accounts.push(AccountMeta::new_readonly(event_authority, false));
     accounts.push(AccountMeta::new_readonly(crate::ID, false));
 
@@ -1590,23 +1590,22 @@ pub fn interchain_transfer(
     let accounts = vec![
         AccountMeta::new(payer, true),
         AccountMeta::new_readonly(authority, true),
+        AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new(source_account, false),
         AccountMeta::new(mint, false),
         AccountMeta::new(token_manager_pda, false),
         AccountMeta::new(token_manager_ata, false),
         AccountMeta::new_readonly(token_program, false),
+        AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
         AccountMeta::new_readonly(gateway_root_pda, false),
         AccountMeta::new_readonly(gateway_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
         AccountMeta::new(gas_config_pda, false),
         AccountMeta::new_readonly(gas_service_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gas_service::ID, false),
-        AccountMeta::new_readonly(system_program::ID, false),
-        AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new_readonly(call_contract_signing_pda, false),
-        AccountMeta::new_readonly(crate::ID, false),
-        AccountMeta::new_readonly(event_authority, false),
-        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     let data = to_vec(&InterchainTokenServiceInstruction::InterchainTransfer {
@@ -1668,23 +1667,22 @@ pub fn cpi_interchain_transfer(
     let accounts = vec![
         AccountMeta::new(payer, true),
         AccountMeta::new_readonly(authority, true),
+        AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new(source_account, false),
         AccountMeta::new(mint, false),
         AccountMeta::new(token_manager_pda, false),
         AccountMeta::new(token_manager_ata, false),
         AccountMeta::new_readonly(token_program, false),
+        AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
         AccountMeta::new_readonly(gateway_root_pda, false),
         AccountMeta::new_readonly(gateway_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
         AccountMeta::new(gas_config_pda, false),
         AccountMeta::new_readonly(gas_service_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gas_service::ID, false),
-        AccountMeta::new_readonly(system_program::ID, false),
-        AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new_readonly(call_contract_signing_pda, false),
-        AccountMeta::new_readonly(crate::ID, false),
-        AccountMeta::new_readonly(event_authority, false),
-        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     let data = to_vec(&InterchainTokenServiceInstruction::CpiInterchainTransfer {
@@ -1746,23 +1744,22 @@ pub fn call_contract_with_interchain_token(
     let accounts = vec![
         AccountMeta::new(payer, true),
         AccountMeta::new_readonly(authority, true),
+        AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new(source_account, false),
         AccountMeta::new(mint, false),
-        AccountMeta::new_readonly(token_manager_pda, false),
+        AccountMeta::new(token_manager_pda, false),
         AccountMeta::new(token_manager_ata, false),
         AccountMeta::new_readonly(token_program, false),
+        AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
         AccountMeta::new_readonly(gateway_root_pda, false),
         AccountMeta::new_readonly(gateway_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
         AccountMeta::new(gas_config_pda, false),
         AccountMeta::new_readonly(gas_service_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gas_service::ID, false),
-        AccountMeta::new_readonly(system_program::ID, false),
-        AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new_readonly(call_contract_signing_pda, false),
-        AccountMeta::new_readonly(crate::ID, false),
-        AccountMeta::new_readonly(event_authority, false),
-        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     let data = to_vec(
@@ -1828,23 +1825,22 @@ pub fn cpi_call_contract_with_interchain_token(
     let accounts = vec![
         AccountMeta::new(payer, true),
         AccountMeta::new_readonly(authority, true),
+        AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new(source_account, false),
         AccountMeta::new(mint, false),
         AccountMeta::new(token_manager_pda, false),
         AccountMeta::new(token_manager_ata, false),
         AccountMeta::new_readonly(token_program, false),
+        AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
         AccountMeta::new_readonly(gateway_root_pda, false),
         AccountMeta::new_readonly(gateway_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
         AccountMeta::new(gas_config_pda, false),
         AccountMeta::new_readonly(gas_service_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gas_service::ID, false),
-        AccountMeta::new_readonly(system_program::ID, false),
-        AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new_readonly(call_contract_signing_pda, false),
-        AccountMeta::new_readonly(crate::ID, false),
-        AccountMeta::new_readonly(event_authority, false),
-        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     let data = to_vec(

@@ -1,4 +1,3 @@
-use event_utils::Event;
 use interchain_token_transfer_gmp::{GMPPayload, InterchainTransfer};
 use solana_program_test::tokio;
 use solana_sdk::program_pack::Pack as _;
@@ -127,17 +126,14 @@ async fn test_inbound_transfer_using_token_account_mint_burn(
             .into(),
     });
 
-    let tx = ctx
+    let (inner_ixs, _tx) = ctx
         .relay_to_solana(&payload.encode(), Some(custom_mint), spl_token_2022::id())
         .await;
 
-    let logs = tx.metadata.unwrap().log_messages;
-    let transfer_received_event = logs
-        .iter()
-        .find_map(|log| {
-            axelar_solana_its::event::InterchainTransferReceived::try_from_log(log).ok()
-        })
-        .expect("InterchainTransferReceived event should be present");
+    let transfer_received_event = crate::find_event_in_inner_instructions::<
+        axelar_solana_its::events::InterchainTransferReceived,
+    >(&inner_ixs)
+    .expect("InterchainTransferReceived event should be present");
 
     assert_eq!(transfer_received_event.amount, transfer_amount);
     assert_eq!(transfer_received_event.token_id, token_id);
@@ -208,17 +204,14 @@ async fn test_inbound_transfer_using_token_account_lock_unlock(
             .into(),
     });
 
-    let tx = ctx
+    let (inner_ixs, _tx) = ctx
         .relay_to_solana(&payload.encode(), Some(custom_mint), spl_token_2022::id())
         .await;
 
-    let logs = tx.metadata.unwrap().log_messages;
-    let transfer_received_event = logs
-        .iter()
-        .find_map(|log| {
-            axelar_solana_its::event::InterchainTransferReceived::try_from_log(log).ok()
-        })
-        .expect("InterchainTransferReceived event should be present");
+    let transfer_received_event = crate::find_event_in_inner_instructions::<
+        axelar_solana_its::events::InterchainTransferReceived,
+    >(&inner_ixs)
+    .expect("InterchainTransferReceived event should be present");
 
     assert_eq!(transfer_received_event.amount, transfer_amount);
     assert_eq!(transfer_received_event.token_id, token_id);
@@ -277,17 +270,14 @@ async fn test_inbound_transfer_using_wallet_mint_burn(
             .into(),
     });
 
-    let tx = ctx
+    let (inner_ixs, _tx) = ctx
         .relay_to_solana(&payload.encode(), Some(custom_mint), spl_token_2022::id())
         .await;
 
-    let logs = tx.metadata.unwrap().log_messages;
-    let transfer_received_event = logs
-        .iter()
-        .find_map(|log| {
-            axelar_solana_its::event::InterchainTransferReceived::try_from_log(log).ok()
-        })
-        .expect("InterchainTransferReceived event should be present");
+    let transfer_received_event = crate::find_event_in_inner_instructions::<
+        axelar_solana_its::events::InterchainTransferReceived,
+    >(&inner_ixs)
+    .expect("InterchainTransferReceived event should be present");
 
     assert_eq!(transfer_received_event.amount, transfer_amount);
     assert_eq!(transfer_received_event.token_id, token_id);
@@ -364,17 +354,14 @@ async fn test_inbound_transfer_using_wallet_lock_unlock(
             .into(),
     });
 
-    let tx = ctx
+    let (inner_ixs, _tx) = ctx
         .relay_to_solana(&payload.encode(), Some(custom_mint), spl_token_2022::id())
         .await;
 
-    let logs = tx.metadata.unwrap().log_messages;
-    let transfer_received_event = logs
-        .iter()
-        .find_map(|log| {
-            axelar_solana_its::event::InterchainTransferReceived::try_from_log(log).ok()
-        })
-        .expect("InterchainTransferReceived event should be present");
+    let transfer_received_event = crate::find_event_in_inner_instructions::<
+        axelar_solana_its::events::InterchainTransferReceived,
+    >(&inner_ixs)
+    .expect("InterchainTransferReceived event should be present");
 
     assert_eq!(transfer_received_event.amount, transfer_amount);
     assert_eq!(transfer_received_event.token_id, token_id);

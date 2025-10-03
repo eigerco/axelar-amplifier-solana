@@ -855,6 +855,8 @@ pub fn set_trusted_chain(
     let (its_root_pda, _) = crate::find_its_root_pda();
     let (authority_roles_pda, _) =
         role_management::find_user_roles_pda(&crate::ID, &its_root_pda, &authority);
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
 
     let data = to_vec(&InterchainTokenServiceInstruction::SetTrustedChain { chain_name })?;
 
@@ -865,6 +867,8 @@ pub fn set_trusted_chain(
         AccountMeta::new_readonly(program_data_address, false),
         AccountMeta::new(its_root_pda, false),
         AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     Ok(Instruction {
@@ -889,6 +893,8 @@ pub fn remove_trusted_chain(
     let (its_root_pda, _) = crate::find_its_root_pda();
     let (authority_roles_pda, _) =
         role_management::find_user_roles_pda(&crate::ID, &its_root_pda, &authority);
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
 
     let data = to_vec(&InterchainTokenServiceInstruction::RemoveTrustedChain { chain_name })?;
 
@@ -899,6 +905,8 @@ pub fn remove_trusted_chain(
         AccountMeta::new_readonly(program_data_address, false),
         AccountMeta::new(its_root_pda, false),
         AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     Ok(Instruction {
@@ -942,6 +950,8 @@ pub fn approve_deploy_remote_interchain_token(
         role_management::find_user_roles_pda(&crate::ID, &token_manager_pda, &minter);
     let (deploy_approval_pda, _) =
         crate::find_deployment_approval_pda(&minter, &token_id, &destination_chain);
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
 
     let accounts = vec![
         AccountMeta::new(payer, true),
@@ -950,6 +960,8 @@ pub fn approve_deploy_remote_interchain_token(
         AccountMeta::new_readonly(roles_pda, false),
         AccountMeta::new(deploy_approval_pda, false),
         AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     let data = to_vec(
@@ -994,12 +1006,16 @@ pub fn revoke_deploy_remote_interchain_token(
     let token_id = crate::interchain_token_id(&deployer, &salt);
     let (deploy_approval_pda, _) =
         crate::find_deployment_approval_pda(&minter, &token_id, &destination_chain);
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
 
     let accounts = vec![
         AccountMeta::new(payer, true),
         AccountMeta::new_readonly(minter, true),
         AccountMeta::new(deploy_approval_pda, false),
         AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     let data = to_vec(
@@ -1034,6 +1050,8 @@ pub fn register_canonical_interchain_token(
     let token_manager_ata =
         get_associated_token_address_with_program_id(&token_manager_pda, &mint, &token_program);
     let (token_metadata_account, _) = mpl_token_metadata::accounts::Metadata::find_pda(&mint);
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
 
     let accounts = vec![
         AccountMeta::new(payer, true),
@@ -1046,6 +1064,8 @@ pub fn register_canonical_interchain_token(
         AccountMeta::new_readonly(token_program, false),
         AccountMeta::new_readonly(spl_associated_token_account::ID, false),
         AccountMeta::new_readonly(sysvar::rent::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     let data = to_vec(&InterchainTokenServiceInstruction::RegisterCanonicalInterchainToken)?;
@@ -1077,6 +1097,16 @@ pub fn deploy_remote_canonical_interchain_token(
     let (gas_config_pda, _bump) = axelar_solana_gas_service::get_config_pda();
     let token_id = crate::canonical_interchain_token_id(&mint);
     let (token_manager, _) = crate::find_token_manager_pda(&its_root_pda, &token_id);
+    let (gateway_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gateway::ID,
+    );
+    let (gas_service_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gas_service::ID,
+    );
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
 
     let accounts = vec![
         AccountMeta::new(payer, true),
@@ -1084,12 +1114,16 @@ pub fn deploy_remote_canonical_interchain_token(
         AccountMeta::new_readonly(metadata_account_key, false),
         AccountMeta::new_readonly(token_manager, false),
         AccountMeta::new_readonly(gateway_root_pda, false),
+        AccountMeta::new_readonly(gateway_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
         AccountMeta::new(gas_config_pda, false),
+        AccountMeta::new_readonly(gas_service_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gas_service::ID, false),
         AccountMeta::new_readonly(system_program::ID, false),
         AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new_readonly(call_contract_signing_pda, false),
+        AccountMeta::new_readonly(crate::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
         AccountMeta::new_readonly(crate::ID, false),
     ];
 
@@ -1136,8 +1170,10 @@ pub fn deploy_interchain_token(
     let deployer_ata =
         get_associated_token_address_with_program_id(&deployer, &mint, &spl_token_2022::ID);
     let (metadata_account_key, _) = mpl_token_metadata::accounts::Metadata::find_pda(&mint);
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
 
-    let mut accounts = vec![
+    let accounts = vec![
         AccountMeta::new(payer, true),
         AccountMeta::new_readonly(deployer, true),
         AccountMeta::new_readonly(system_program::ID, false),
@@ -1152,14 +1188,17 @@ pub fn deploy_interchain_token(
         AccountMeta::new_readonly(mpl_token_metadata::ID, false),
         AccountMeta::new(metadata_account_key, false),
         AccountMeta::new(deployer_ata, false),
+        AccountMeta::new_readonly(minter.unwrap_or(crate::ID), false),
+        if let Some(minter) = minter {
+            let (minter_roles_pda, _) =
+                role_management::find_user_roles_pda(&crate::ID, &token_manager_pda, &minter);
+            AccountMeta::new(minter_roles_pda, false)
+        } else {
+            AccountMeta::new_readonly(crate::ID, false)
+        },
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
     ];
-
-    if let Some(minter) = minter {
-        let (minter_roles_pda, _) =
-            role_management::find_user_roles_pda(&crate::ID, &token_manager_pda, &minter);
-        accounts.push(AccountMeta::new_readonly(minter, false));
-        accounts.push(AccountMeta::new(minter_roles_pda, false));
-    }
 
     let data = to_vec(&InterchainTokenServiceInstruction::DeployInterchainToken {
         salt,
@@ -1198,6 +1237,16 @@ pub fn deploy_remote_interchain_token(
     let (metadata_account_key, _) = mpl_token_metadata::accounts::Metadata::find_pda(&mint);
     let (gas_config_pda, _bump) = axelar_solana_gas_service::get_config_pda();
     let (token_manager, _) = crate::find_token_manager_pda(&its_root_pda, &token_id);
+    let (gateway_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gateway::ID,
+    );
+    let (gas_service_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gas_service::ID,
+    );
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
 
     let accounts = vec![
         AccountMeta::new(payer, true),
@@ -1206,12 +1255,16 @@ pub fn deploy_remote_interchain_token(
         AccountMeta::new_readonly(metadata_account_key, false),
         AccountMeta::new_readonly(token_manager, false),
         AccountMeta::new_readonly(gateway_root_pda, false),
+        AccountMeta::new_readonly(gateway_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
         AccountMeta::new(gas_config_pda, false),
+        AccountMeta::new_readonly(gas_service_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gas_service::ID, false),
         AccountMeta::new_readonly(system_program::ID, false),
         AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new_readonly(call_contract_signing_pda, false),
+        AccountMeta::new_readonly(crate::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
         AccountMeta::new_readonly(crate::ID, false),
     ];
 
@@ -1259,6 +1312,16 @@ pub fn deploy_remote_interchain_token_with_minter(
     let (minter_roles_pda, _) =
         role_management::find_user_roles_pda(&crate::ID, &token_manager_pda, &minter);
     let (gas_config_pda, _bump) = axelar_solana_gas_service::get_config_pda();
+    let (gateway_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gateway::ID,
+    );
+    let (gas_service_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gas_service::ID,
+    );
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
 
     let accounts = vec![
         AccountMeta::new(payer, true),
@@ -1270,12 +1333,16 @@ pub fn deploy_remote_interchain_token_with_minter(
         AccountMeta::new(deploy_approval, false),
         AccountMeta::new_readonly(minter_roles_pda, false),
         AccountMeta::new_readonly(gateway_root_pda, false),
+        AccountMeta::new_readonly(gateway_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
         AccountMeta::new(gas_config_pda, false),
+        AccountMeta::new_readonly(gas_service_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gas_service::ID, false),
         AccountMeta::new_readonly(system_program::ID, false),
         AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new_readonly(call_contract_signing_pda, false),
+        AccountMeta::new_readonly(crate::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
         AccountMeta::new_readonly(crate::ID, false),
     ];
 
@@ -1311,17 +1378,31 @@ pub fn register_token_metadata(
     let (call_contract_signing_pda, signing_pda_bump) =
         axelar_solana_gateway::get_call_contract_signing_pda(crate::ID);
     let (gas_config_pda, _bump) = axelar_solana_gas_service::get_config_pda();
+    let (gateway_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gateway::ID,
+    );
+    let (gas_service_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gas_service::ID,
+    );
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
 
     let accounts = vec![
         AccountMeta::new(payer, true),
         AccountMeta::new_readonly(mint, false),
         AccountMeta::new_readonly(gateway_root_pda, false),
+        AccountMeta::new_readonly(gateway_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
         AccountMeta::new(gas_config_pda, false),
+        AccountMeta::new_readonly(gas_service_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gas_service::ID, false),
         AccountMeta::new_readonly(system_program::ID, false),
         AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new_readonly(call_contract_signing_pda, false),
+        AccountMeta::new_readonly(crate::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
         AccountMeta::new_readonly(crate::ID, false),
     ];
 
@@ -1357,6 +1438,8 @@ pub fn register_custom_token(
     let (token_manager_pda, _) = crate::find_token_manager_pda(&its_root_pda, &token_id);
     let token_manager_ata =
         get_associated_token_address_with_program_id(&token_manager_pda, &mint, &token_program);
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
 
     let mut accounts = vec![
         AccountMeta::new(payer, true),
@@ -1371,12 +1454,20 @@ pub fn register_custom_token(
         AccountMeta::new_readonly(sysvar::rent::ID, false),
     ];
 
+    // Add optional operator accounts (uses program_id as sentinel for None)
     if let Some(operator) = operator {
         let (operator_roles_pda, _) =
             role_management::find_user_roles_pda(&crate::ID, &token_manager_pda, &operator);
-        accounts.push(AccountMeta::new(operator, false));
+        accounts.push(AccountMeta::new_readonly(operator, false));
         accounts.push(AccountMeta::new(operator_roles_pda, false));
+    } else {
+        accounts.push(AccountMeta::new_readonly(crate::ID, false));
+        accounts.push(AccountMeta::new_readonly(crate::ID, false));
     }
+
+    // Event CPI accounts
+    accounts.push(AccountMeta::new_readonly(event_authority, false));
+    accounts.push(AccountMeta::new_readonly(crate::ID, false));
 
     let data = to_vec(&InterchainTokenServiceInstruction::RegisterCustomToken {
         salt,
@@ -1413,18 +1504,32 @@ pub fn link_token(
     let token_id = crate::linked_token_id(&deployer, &salt);
     let (token_manager_pda, _) = crate::find_token_manager_pda(&its_root_pda, &token_id);
     let (gas_config_pda, _bump) = axelar_solana_gas_service::get_config_pda();
+    let (gateway_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gateway::ID,
+    );
+    let (gas_service_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gas_service::ID,
+    );
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
 
     let accounts = vec![
         AccountMeta::new(payer, true),
         AccountMeta::new_readonly(deployer, true),
         AccountMeta::new_readonly(token_manager_pda, false),
         AccountMeta::new_readonly(gateway_root_pda, false),
+        AccountMeta::new_readonly(gateway_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
         AccountMeta::new(gas_config_pda, false),
+        AccountMeta::new_readonly(gas_service_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gas_service::ID, false),
         AccountMeta::new_readonly(system_program::ID, false),
         AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new_readonly(call_contract_signing_pda, false),
+        AccountMeta::new_readonly(crate::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
         AccountMeta::new_readonly(crate::ID, false),
     ];
 
@@ -1471,23 +1576,36 @@ pub fn interchain_transfer(
     let (call_contract_signing_pda, signing_pda_bump) =
         axelar_solana_gateway::get_call_contract_signing_pda(crate::ID);
     let (gas_config_pda, _bump) = axelar_solana_gas_service::get_config_pda();
+    let (gateway_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gateway::ID,
+    );
+    let (gas_service_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gas_service::ID,
+    );
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
 
     let accounts = vec![
         AccountMeta::new(payer, true),
         AccountMeta::new_readonly(authority, true),
+        AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new(source_account, false),
         AccountMeta::new(mint, false),
         AccountMeta::new(token_manager_pda, false),
         AccountMeta::new(token_manager_ata, false),
         AccountMeta::new_readonly(token_program, false),
+        AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
         AccountMeta::new_readonly(gateway_root_pda, false),
+        AccountMeta::new_readonly(gateway_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
         AccountMeta::new(gas_config_pda, false),
+        AccountMeta::new_readonly(gas_service_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gas_service::ID, false),
-        AccountMeta::new_readonly(system_program::ID, false),
-        AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new_readonly(call_contract_signing_pda, false),
-        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     let data = to_vec(&InterchainTokenServiceInstruction::InterchainTransfer {
@@ -1535,23 +1653,36 @@ pub fn cpi_interchain_transfer(
     let (call_contract_signing_pda, signing_pda_bump) =
         axelar_solana_gateway::get_call_contract_signing_pda(crate::ID);
     let (gas_config_pda, _bump) = axelar_solana_gas_service::get_config_pda();
+    let (gateway_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gateway::ID,
+    );
+    let (gas_service_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gas_service::ID,
+    );
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
 
     let accounts = vec![
         AccountMeta::new(payer, true),
         AccountMeta::new_readonly(authority, true),
+        AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new(source_account, false),
         AccountMeta::new(mint, false),
         AccountMeta::new(token_manager_pda, false),
         AccountMeta::new(token_manager_ata, false),
         AccountMeta::new_readonly(token_program, false),
+        AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
         AccountMeta::new_readonly(gateway_root_pda, false),
+        AccountMeta::new_readonly(gateway_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
         AccountMeta::new(gas_config_pda, false),
+        AccountMeta::new_readonly(gas_service_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gas_service::ID, false),
-        AccountMeta::new_readonly(system_program::ID, false),
-        AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new_readonly(call_contract_signing_pda, false),
-        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     let data = to_vec(&InterchainTokenServiceInstruction::CpiInterchainTransfer {
@@ -1591,29 +1722,44 @@ pub fn call_contract_with_interchain_token(
     token_program: Pubkey,
     gas_value: u64,
 ) -> Result<Instruction, ProgramError> {
+    let (gateway_root_pda, _) = axelar_solana_gateway::get_gateway_root_config_pda();
     let (its_root_pda, _) = crate::find_its_root_pda();
     let (token_manager_pda, _) = crate::find_token_manager_pda(&its_root_pda, &token_id);
     let token_manager_ata =
         get_associated_token_address_with_program_id(&token_manager_pda, &mint, &token_program);
     let (call_contract_signing_pda, signing_pda_bump) =
         axelar_solana_gateway::get_call_contract_signing_pda(crate::ID);
+    let (gateway_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gateway::ID,
+    );
+    let (gas_service_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gas_service::ID,
+    );
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
     let (gas_config_pda, _bump) = axelar_solana_gas_service::get_config_pda();
 
     let accounts = vec![
         AccountMeta::new(payer, true),
         AccountMeta::new_readonly(authority, true),
+        AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new(source_account, false),
         AccountMeta::new(mint, false),
-        AccountMeta::new_readonly(token_manager_pda, false),
+        AccountMeta::new(token_manager_pda, false),
         AccountMeta::new(token_manager_ata, false),
         AccountMeta::new_readonly(token_program, false),
+        AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
+        AccountMeta::new_readonly(gateway_root_pda, false),
+        AccountMeta::new_readonly(gateway_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
         AccountMeta::new(gas_config_pda, false),
+        AccountMeta::new_readonly(gas_service_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gas_service::ID, false),
-        AccountMeta::new_readonly(system_program::ID, false),
-        AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new_readonly(call_contract_signing_pda, false),
-        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     let data = to_vec(
@@ -1664,24 +1810,37 @@ pub fn cpi_call_contract_with_interchain_token(
         get_associated_token_address_with_program_id(&token_manager_pda, &mint, &token_program);
     let (call_contract_signing_pda, signing_pda_bump) =
         axelar_solana_gateway::get_call_contract_signing_pda(crate::ID);
+    let (gateway_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gateway::ID,
+    );
+    let (gas_service_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gas_service::ID,
+    );
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
     let (gas_config_pda, _bump) = axelar_solana_gas_service::get_config_pda();
 
     let accounts = vec![
         AccountMeta::new(payer, true),
         AccountMeta::new_readonly(authority, true),
+        AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new(source_account, false),
         AccountMeta::new(mint, false),
         AccountMeta::new(token_manager_pda, false),
         AccountMeta::new(token_manager_ata, false),
         AccountMeta::new_readonly(token_program, false),
+        AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
         AccountMeta::new_readonly(gateway_root_pda, false),
+        AccountMeta::new_readonly(gateway_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
         AccountMeta::new(gas_config_pda, false),
+        AccountMeta::new_readonly(gas_service_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gas_service::ID, false),
-        AccountMeta::new_readonly(system_program::ID, false),
-        AccountMeta::new_readonly(its_root_pda, false),
         AccountMeta::new_readonly(call_contract_signing_pda, false),
-        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     let data = to_vec(
@@ -1720,6 +1879,8 @@ pub fn set_flow_limit(
     let (token_manager_pda, _) = crate::find_token_manager_pda(&its_root_pda, &token_id);
     let (its_user_roles_pda, _) =
         role_management::find_user_roles_pda(&crate::ID, &its_root_pda, &operator);
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
 
     let data = to_vec(&InterchainTokenServiceInstruction::SetFlowLimit { flow_limit })?;
     let accounts = vec![
@@ -1729,6 +1890,8 @@ pub fn set_flow_limit(
         AccountMeta::new_readonly(its_user_roles_pda, false),
         AccountMeta::new(token_manager_pda, false),
         AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(event_authority, false),
+        AccountMeta::new_readonly(crate::ID, false),
     ];
 
     Ok(Instruction {
@@ -1910,12 +2073,17 @@ fn prefix_accounts(
     let command_id = command_id(&message.cc_id.chain, &message.cc_id.id);
     let (gateway_approved_message_signing_pda, _) =
         axelar_solana_gateway::get_validate_message_signing_pda(crate::ID, command_id);
+    let (gateway_event_authority, _bump) = Pubkey::find_program_address(
+        &[event_cpi::EVENT_AUTHORITY_SEED],
+        &axelar_solana_gateway::ID,
+    );
 
     vec![
         AccountMeta::new(*payer, true),
         AccountMeta::new(*gateway_incoming_message_pda, false),
         AccountMeta::new_readonly(*gateway_message_payload_pda, false),
         AccountMeta::new_readonly(gateway_approved_message_signing_pda, false),
+        AccountMeta::new_readonly(gateway_event_authority, false),
         AccountMeta::new_readonly(axelar_solana_gateway::ID, false),
     ]
 }
@@ -1977,10 +2145,13 @@ fn derive_specific_its_accounts(
             specific_accounts.push(AccountMeta::new(wallet, false));
             specific_accounts.push(AccountMeta::new(destination_ata, false));
 
-            if !data.is_empty() {
+            if data.is_empty() {
+                specific_accounts.push(AccountMeta::new_readonly(crate::ID, false));
+            } else {
                 let (its_transfer_execute_pda, _bump) =
                     crate::find_interchain_transfer_execute_pda(&wallet);
                 specific_accounts.push(AccountMeta::new(its_transfer_execute_pda, false));
+
                 let execute_data = DataPayload::decode(data)
                     .map_err(|_err| ProgramError::InvalidInstructionData)?;
                 specific_accounts.extend(execute_data.account_meta().iter().cloned());
@@ -1996,7 +2167,10 @@ fn derive_specific_its_accounts(
             // No initial supply is ever set through GMP, so no payer ATA required.
             specific_accounts.push(AccountMeta::new_readonly(crate::ID, false));
 
-            if !minter.is_empty() {
+            if minter.is_empty() {
+                specific_accounts.push(AccountMeta::new_readonly(crate::ID, false));
+                specific_accounts.push(AccountMeta::new_readonly(crate::ID, false));
+            } else {
                 let minter_key = Pubkey::new_from_array(
                     (*minter)
                         .try_into()
@@ -2019,6 +2193,9 @@ fn derive_specific_its_accounts(
 
                 specific_accounts.push(AccountMeta::new_readonly(operator, false));
                 specific_accounts.push(AccountMeta::new(operator_roles_pda, false));
+            } else {
+                specific_accounts.push(AccountMeta::new_readonly(crate::ID, false));
+                specific_accounts.push(AccountMeta::new_readonly(crate::ID, false));
             }
         }
     };
@@ -2065,6 +2242,9 @@ fn derive_common_its_accounts(
         &token_program,
     );
 
+    let (event_authority, _bump) =
+        Pubkey::find_program_address(&[event_cpi::EVENT_AUTHORITY_SEED], &crate::ID);
+
     Ok((
         vec![
             AccountMeta::new_readonly(system_program::ID, false),
@@ -2075,6 +2255,8 @@ fn derive_common_its_accounts(
             AccountMeta::new_readonly(token_program, false),
             AccountMeta::new_readonly(spl_associated_token_account::ID, false),
             AccountMeta::new_readonly(sysvar::rent::ID, false),
+            AccountMeta::new_readonly(event_authority, false),
+            AccountMeta::new_readonly(crate::ID, false),
         ],
         token_mint,
         token_manager_pda,
@@ -2221,9 +2403,9 @@ mod tests {
         assert!(result.is_ok());
         let accounts = result.unwrap();
 
-        // Should have 4 accounts (sysvar::instructions, mpl_token_metadata, metadata_account, crate::ID)
+        // Should have 6 accounts (sysvar::instructions, mpl_token_metadata, metadata_account, crate::ID, crate::ID, crate::ID)
         // but no minter-related accounts
-        assert_eq!(accounts.len(), 4);
+        assert_eq!(accounts.len(), 6);
     }
 
     #[test]

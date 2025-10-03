@@ -1,7 +1,7 @@
+use anyhow::anyhow;
 use axelar_solana_gateway_test_fixtures::base::FindLog;
-use axelar_solana_its::event::InterchainTransfer;
+use axelar_solana_its::events::InterchainTransfer;
 use borsh::BorshDeserialize;
-use event_utils::Event;
 use evm_contracts_test_suite::ethers::signers::Signer;
 use mpl_token_metadata::accounts::Metadata;
 use mpl_token_metadata::instructions::CreateV1Builder;
@@ -23,9 +23,7 @@ use evm_contracts_test_suite::evm_contracts_rs::contracts::{
 use evm_contracts_test_suite::ContractMiddleware;
 use interchain_token_transfer_gmp::GMPPayload;
 
-use crate::{
-    fetch_first_call_contract_event_from_tx, retrieve_evm_log_with_filter, ItsTestContext,
-};
+use crate::{find_event_in_inner_instructions, retrieve_evm_log_with_filter, ItsTestContext};
 
 async fn custom_token(
     ctx: &mut ItsTestContext,
@@ -66,11 +64,25 @@ async fn custom_token(
         0,
     )?;
 
-    let tx = ctx
-        .send_solana_tx(&[metadata_ix, register_metadata])
+    // Simulate first to get the event
+    let simulation_result = ctx
+        .simulate_solana_tx(&[metadata_ix.clone(), register_metadata.clone()])
+        .await;
+    let inner_ixs = simulation_result
+        .simulation_details
+        .unwrap()
+        .inner_instructions
+        .unwrap()[1]
+        .clone();
+    let call_contract_event = find_event_in_inner_instructions::<
+        axelar_solana_gateway::events::CallContractEvent,
+    >(&inner_ixs)
+    .expect("CallContractEvent not found");
+
+    // Then execute the transaction
+    ctx.send_solana_tx(&[metadata_ix, register_metadata])
         .await
         .unwrap();
-    let call_contract_event = fetch_first_call_contract_event_from_tx(&tx);
 
     let GMPPayload::RegisterTokenMetadata(register_message) =
         GMPPayload::decode(&call_contract_event.payload)?
@@ -117,8 +129,24 @@ async fn custom_token(
         0,
     )?;
 
-    let tx = ctx.send_solana_tx(&[link_token_ix]).await.unwrap();
-    let call_contract_event = fetch_first_call_contract_event_from_tx(&tx);
+    // Simulate first to get the event
+    let simulation_result = ctx.simulate_solana_tx(&[link_token_ix.clone()]).await;
+    let inner_ixs = simulation_result
+        .simulation_details
+        .unwrap()
+        .inner_instructions
+        .unwrap()
+        .first()
+        .cloned()
+        .unwrap();
+    let call_contract_event = find_event_in_inner_instructions::<
+        axelar_solana_gateway::events::CallContractEvent,
+    >(&inner_ixs)
+    .expect("CallContractEvent not found");
+
+    // Then execute the transaction
+    ctx.send_solana_tx(&[link_token_ix]).await.unwrap();
+
     let message = if let GMPPayload::SendToHub(inner) =
         GMPPayload::decode(&call_contract_event.payload)?
     {
@@ -234,12 +262,28 @@ async fn canonical_token(
             0,
         )?;
 
-    let tx = ctx
-        .send_solana_tx(&[deploy_remote_canonical_token_ix])
+    // Simulate first to get the event
+    let simulation_result = ctx
+        .simulate_solana_tx(&[deploy_remote_canonical_token_ix.clone()])
+        .await;
+    let inner_ixs = simulation_result
+        .simulation_details
+        .unwrap()
+        .inner_instructions
+        .unwrap()
+        .first()
+        .cloned()
+        .unwrap();
+    let call_contract_event = find_event_in_inner_instructions::<
+        axelar_solana_gateway::events::CallContractEvent,
+    >(&inner_ixs)
+    .expect("CallContractEvent not found");
+
+    // Then execute the transaction
+    ctx.send_solana_tx(&[deploy_remote_canonical_token_ix])
         .await
         .unwrap();
 
-    let call_contract_event = fetch_first_call_contract_event_from_tx(&tx);
     let message =
         if let GMPPayload::SendToHub(inner) = GMPPayload::decode(&call_contract_event.payload)? {
             let GMPPayload::DeployInterchainToken(deploy_token) =
@@ -526,7 +570,7 @@ async fn transfer_fails_with_wrong_gas_service(ctx: &mut ItsTestContext) -> anyh
         1000, // gas_value needs to be greater than 0 for pay_gas to be called
     )
     .unwrap();
-    transfer_ix.accounts[9].pubkey = Pubkey::new_unique(); // invalid gas service
+    transfer_ix.accounts[12].pubkey = Pubkey::new_unique(); // invalid gas service
 
     assert!(ctx
         .send_solana_tx(&[transfer_ix])
@@ -692,7 +736,7 @@ async fn test_mint_burn_from_interchain_transfer_with_approval(
     // Check that an invalid program account leads to a failure
     {
         let mut link_token_ix = link_token_ix.clone();
-        link_token_ix.accounts[10].pubkey = Pubkey::new_unique();
+        link_token_ix.accounts[12].pubkey = Pubkey::new_unique();
         let result = ctx.send_solana_tx(&[link_token_ix]).await;
         assert!(result.is_err());
 
@@ -702,8 +746,24 @@ async fn test_mint_burn_from_interchain_transfer_with_approval(
         );
     }
 
-    let tx = ctx.send_solana_tx(&[link_token_ix]).await.unwrap();
-    let call_contract_event = fetch_first_call_contract_event_from_tx(&tx);
+    // Simulate first to get the event
+    let simulation_result = ctx.simulate_solana_tx(&[link_token_ix.clone()]).await;
+    let inner_ixs = simulation_result
+        .simulation_details
+        .unwrap()
+        .inner_instructions
+        .unwrap()
+        .first()
+        .cloned()
+        .unwrap();
+    let call_contract_event = find_event_in_inner_instructions::<
+        axelar_solana_gateway::events::CallContractEvent,
+    >(&inner_ixs)
+    .expect("CallContractEvent not found");
+
+    // Then execute the transaction
+    ctx.send_solana_tx(&[link_token_ix]).await.unwrap();
+
     ctx.relay_to_evm(&call_contract_event.payload).await;
 
     // Transfer mint authority to ITS
@@ -806,7 +866,25 @@ async fn test_mint_burn_from_interchain_transfer_with_approval(
         0,
     )?;
 
-    let tx = ctx.send_solana_tx(&[interchain_transfer_ix]).await.unwrap();
+    // Simulate first to get the event
+    let simulation_result = ctx
+        .simulate_solana_tx(&[interchain_transfer_ix.clone()])
+        .await;
+    let inner_ixs = simulation_result
+        .simulation_details
+        .unwrap()
+        .inner_instructions
+        .unwrap()
+        .first()
+        .cloned()
+        .unwrap();
+    let call_contract_event = find_event_in_inner_instructions::<
+        axelar_solana_gateway::events::CallContractEvent,
+    >(&inner_ixs)
+    .expect("CallContractEvent not found");
+
+    // Then execute the transaction
+    ctx.send_solana_tx(&[interchain_transfer_ix]).await.unwrap();
 
     // Verify the transfer was successful by checking bob's balance
     let bob_account_data = ctx
@@ -829,7 +907,6 @@ async fn test_mint_burn_from_interchain_transfer_with_approval(
     );
 
     // Verify the event was emitted
-    let call_contract_event = fetch_first_call_contract_event_from_tx(&tx);
     let GMPPayload::SendToHub(hub_message) = GMPPayload::decode(&call_contract_event.payload)?
     else {
         panic!("wrong message");
@@ -936,7 +1013,7 @@ async fn test_ata_must_match_pda_derivation(ctx: &mut ItsTestContext) -> anyhow:
     .unwrap();
 
     // Now inject an arbitrary ATA that does not match the token manager PDA
-    transfer_ix.accounts[5].pubkey = {
+    transfer_ix.accounts[6].pubkey = {
         let attacker_wallet = Keypair::new();
 
         // Fund the attacker wallet (for transaction fees)
@@ -1020,19 +1097,29 @@ async fn test_source_address_stays_consistent_through_the_transfer(
         0,
     )?;
 
-    let tx = ctx.send_solana_tx(&[transfer_ix]).await.unwrap();
+    // Simulate first to get the events
+    let simulation_result = ctx.simulate_solana_tx(&[transfer_ix.clone()]).await;
+    let inner_ixs = simulation_result
+        .simulation_details
+        .unwrap()
+        .inner_instructions
+        .unwrap()
+        .first()
+        .cloned()
+        .unwrap();
+    let transfer_event = find_event_in_inner_instructions::<InterchainTransfer>(&inner_ixs)
+        .ok_or_else(|| anyhow!("InterchainTransfer not found"))
+        .unwrap();
+    let call_contract_event = find_event_in_inner_instructions::<
+        axelar_solana_gateway::events::CallContractEvent,
+    >(&inner_ixs)
+    .expect("CallContractEvent not found");
+
+    // Then execute the transaction
+    ctx.send_solana_tx(&[transfer_ix]).await.unwrap();
 
     // Extract the CallContract event to get the GMP payload first
-    let call_contract_event = fetch_first_call_contract_event_from_tx(&tx);
-
     let gmp_payload = GMPPayload::decode(&call_contract_event.payload)?;
-
-    // Extract the InterchainTransfer event from logs
-    let logs = tx.metadata.unwrap().log_messages;
-    let transfer_event = logs
-        .iter()
-        .find_map(|log| InterchainTransfer::try_from_log(log).ok())
-        .expect("InterchainTransfer event should be present");
 
     // Extract the InterchainTransfer from the GMP payload
     let GMPPayload::SendToHub(send_to_hub) = gmp_payload else {

@@ -193,6 +193,128 @@ pub fn emit_cpi(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     })
 }
 
+/// Attribute macro that automatically adds event CPI account fields and implements the `EventAccounts` trait.
+///
+/// This macro:
+/// 1. Adds two fields to the struct:
+///    - `__event_cpi_authority_info: &'a AccountInfo<'a>`
+///    - `__event_cpi_program_account: &'a AccountInfo<'a>`
+/// 2. Implements the `EventAccounts` trait for the struct
+///
+/// The fields are added as the last two fields, unless a `remaining_accounts` field exists,
+/// in which case they are added before it.
+///
+/// # Requirements
+/// - Struct must have a lifetime parameter `'a` if it holds references
+///
+/// # Example
+/// ```ignore
+/// #[event_cpi_accounts_derive]
+/// pub struct MyAccounts<'a> {
+///     pub user: &'a AccountInfo<'a>,
+///     pub token: &'a AccountInfo<'a>,
+/// }
+/// ```
+///
+/// Expands to:
+/// ```ignore
+/// pub struct MyAccounts<'a> {
+///     pub user: &'a AccountInfo<'a>,
+///     pub token: &'a AccountInfo<'a>,
+///     pub __event_cpi_authority_info: &'a AccountInfo<'a>,
+///     pub __event_cpi_program_account: &'a AccountInfo<'a>,
+/// }
+///
+/// impl<'a> EventAccounts<'a> for MyAccounts<'a> {
+///     fn event_accounts(&self) -> [&'a AccountInfo<'a>; 2] {
+///         [
+///             self.__event_cpi_authority_info,
+///             self.__event_cpi_program_account,
+///         ]
+///     }
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn event_cpi(
+    _args: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let mut input_struct = parse_macro_input!(input as syn::ItemStruct);
+    let struct_name = &input_struct.ident;
+
+    // Extract generics - we expect a lifetime 'a
+    let generics = &input_struct.generics;
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    // Add the two event CPI fields to the struct
+    if let syn::Fields::Named(ref mut fields) = input_struct.fields {
+        // Find if there's a remaining_accounts field
+        let remaining_accounts_pos = fields.named.iter().position(|f| {
+            f.ident
+                .as_ref()
+                .map(|i| i == "remaining_accounts")
+                .unwrap_or(false)
+        });
+
+        // Create the two new fields we want to add
+        let account_info_type: syn::Type = syn::parse2(quote! {
+            &'a solana_program::account_info::AccountInfo<'a>
+        })
+        .unwrap();
+
+        let authority_field = syn::Field {
+            attrs: vec![],
+            vis: syn::Visibility::Public(syn::VisPublic {
+                pub_token: Default::default(),
+            }),
+            ident: Some(syn::Ident::new(
+                "__event_cpi_authority_info",
+                proc_macro2::Span::call_site(),
+            )),
+            colon_token: Some(Default::default()),
+            ty: account_info_type.clone(),
+        };
+
+        let program_field = syn::Field {
+            attrs: vec![],
+            vis: syn::Visibility::Public(syn::VisPublic {
+                pub_token: Default::default(),
+            }),
+            ident: Some(syn::Ident::new(
+                "__event_cpi_program_account",
+                proc_macro2::Span::call_site(),
+            )),
+            colon_token: Some(Default::default()),
+            ty: account_info_type,
+        };
+
+        // Insert before remaining_accounts if it exists, otherwise append
+        if let Some(pos) = remaining_accounts_pos {
+            fields.named.insert(pos, authority_field);
+            fields.named.insert(pos + 1, program_field);
+        } else {
+            fields.named.push(authority_field);
+            fields.named.push(program_field);
+        }
+    }
+
+    // Generate the implementation
+    let expanded = quote! {
+        #input_struct
+
+        impl #impl_generics event_cpi::EventAccounts<'a> for #struct_name #ty_generics #where_clause {
+            fn event_accounts(&self) -> [&'a solana_program::account_info::AccountInfo<'a>; 2] {
+                [
+                    self.__event_cpi_authority_info,
+                    self.__event_cpi_program_account,
+                ]
+            }
+        }
+    };
+
+    proc_macro::TokenStream::from(expanded)
+}
+
 /// Function-like macro that handles incoming event CPI instructions in your program's processor.
 ///
 /// This macro should be placed at the beginning of your instruction processor to intercept

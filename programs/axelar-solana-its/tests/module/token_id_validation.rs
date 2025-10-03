@@ -14,7 +14,7 @@ use evm_contracts_test_suite::evm_contracts_rs::contracts::custom_test_token::Cu
 use evm_contracts_test_suite::ContractMiddleware;
 use interchain_token_transfer_gmp::GMPPayload;
 
-use crate::{fetch_first_call_contract_event_from_tx, ItsTestContext};
+use crate::{find_event_in_inner_instructions, ItsTestContext};
 
 /// Helper function to set up a custom token with a specific token manager type
 async fn setup_custom_token(
@@ -57,11 +57,25 @@ async fn setup_custom_token(
         0,
     )?;
 
-    let tx = ctx
-        .send_solana_tx(&[metadata_ix, register_metadata])
+    // Simulate first to get the event
+    let simulation_result = ctx
+        .simulate_solana_tx(&[metadata_ix.clone(), register_metadata.clone()])
+        .await;
+    let inner_ixs = simulation_result
+        .simulation_details
+        .unwrap()
+        .inner_instructions
+        .unwrap()[1]
+        .clone();
+    let call_contract_event = find_event_in_inner_instructions::<
+        axelar_solana_gateway::events::CallContractEvent,
+    >(&inner_ixs)
+    .expect("CallContractEvent not found");
+
+    // Then execute the transaction
+    ctx.send_solana_tx(&[metadata_ix, register_metadata])
         .await
         .unwrap();
-    let call_contract_event = fetch_first_call_contract_event_from_tx(&tx);
 
     let GMPPayload::RegisterTokenMetadata(register_message) =
         GMPPayload::decode(&call_contract_event.payload)?
@@ -107,8 +121,24 @@ async fn setup_custom_token(
         0,
     )?;
 
-    let tx = ctx.send_solana_tx(&[link_token_ix]).await.unwrap();
-    let call_contract_event = fetch_first_call_contract_event_from_tx(&tx);
+    // Simulate first to get the event
+    let simulation_result = ctx.simulate_solana_tx(&[link_token_ix.clone()]).await;
+    let inner_ixs = simulation_result
+        .simulation_details
+        .unwrap()
+        .inner_instructions
+        .unwrap()
+        .first()
+        .cloned()
+        .unwrap();
+    let call_contract_event = find_event_in_inner_instructions::<
+        axelar_solana_gateway::events::CallContractEvent,
+    >(&inner_ixs)
+    .expect("CallContractEvent not found");
+
+    // Then execute the transaction
+    ctx.send_solana_tx(&[link_token_ix]).await.unwrap();
+
     ctx.relay_to_evm(&call_contract_event.payload).await;
 
     Ok((token_id, custom_token, custom_solana_token))
@@ -195,11 +225,25 @@ async fn test_valid_token_id_mint_matches_token_address(
         0,
     )?;
 
+    // Simulate first to get the event
+    let simulation_result = ctx.simulate_solana_tx(&[transfer_ix.clone()]).await;
+    let inner_ixs = simulation_result
+        .simulation_details
+        .unwrap()
+        .inner_instructions
+        .unwrap()
+        .first()
+        .cloned()
+        .unwrap();
+    let call_contract_event = find_event_in_inner_instructions::<
+        axelar_solana_gateway::events::CallContractEvent,
+    >(&inner_ixs)
+    .expect("CallContractEvent not found");
+
     // This should succeed without errors
-    let tx = ctx.send_solana_tx(&[transfer_ix]).await.unwrap();
+    ctx.send_solana_tx(&[transfer_ix]).await.unwrap();
 
     // Verify the transfer event was emitted successfully
-    let call_contract_event = fetch_first_call_contract_event_from_tx(&tx);
     let GMPPayload::SendToHub(hub_message) = GMPPayload::decode(&call_contract_event.payload)?
     else {
         panic!("Expected SendToHub message");

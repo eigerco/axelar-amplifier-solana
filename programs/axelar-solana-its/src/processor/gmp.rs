@@ -1,49 +1,41 @@
 //! Program state processor
 use axelar_solana_encoding::types::messages::Message;
-use axelar_solana_gateway::executable::{validate_with_gmp_metadata, PROGRAM_ACCOUNTS_START_INDEX};
+use axelar_solana_gateway::executable::validate_with_gmp_metadata;
 use axelar_solana_gateway::state::message_payload::ImmutMessagePayload;
 use interchain_token_transfer_gmp::{GMPPayload, SendToHub};
 use itertools::{self, Itertools};
-use program_utils::{pda::BorshPda, validate_system_account_key};
-use solana_program::account_info::{next_account_info, AccountInfo};
+use program_utils::pda::BorshPda;
+use solana_program::account_info::AccountInfo;
 use solana_program::entrypoint::ProgramResult;
 use solana_program::msg;
 use solana_program::program::invoke;
 use solana_program::program::invoke_signed;
 use solana_program::program_error::ProgramError;
 
-use crate::processor::interchain_token::{self, DeployInterchainTokenAccounts};
+use crate::accounts::CallContractAccounts;
+use crate::accounts::ExecuteAccounts;
+use crate::instruction;
+use crate::processor::interchain_token;
 use crate::processor::interchain_transfer::process_inbound_transfer;
 use crate::processor::link_token;
 use crate::state::token_manager::TokenManager;
 use crate::state::InterchainTokenService;
 use crate::{
-    assert_its_not_paused, assert_valid_its_root_pda, check_program_account, Validate,
-    ITS_HUB_CHAIN_NAME,
+    assert_its_not_paused, assert_valid_its_root_pda, check_program_account, ITS_HUB_CHAIN_NAME,
 };
-use crate::{instruction, FromAccountInfoSlice};
 
 pub(crate) fn process_execute<'a>(
     accounts: &'a [AccountInfo<'a>],
     message: Message,
 ) -> ProgramResult {
-    let (gateway_accounts, instruction_accounts) = accounts.split_at(PROGRAM_ACCOUNTS_START_INDEX);
+    let its_execute_accounts = ExecuteAccounts::try_from(accounts)?;
+    validate_with_gmp_metadata(
+        &its_execute_accounts.gateway_validation_accounts(),
+        &message,
+    )?;
 
-    validate_with_gmp_metadata(gateway_accounts, &message)?;
-
-    let accounts_iter = &mut accounts.iter();
-    let payer = next_account_info(accounts_iter)?;
-    let _gateway_approved_message_pda = next_account_info(accounts_iter)?;
-    let payload_account = next_account_info(accounts_iter)?;
-    let _signing_pda = next_account_info(accounts_iter)?;
-    let _gateway_program_id = next_account_info(accounts_iter)?;
-    let system_program = next_account_info(accounts_iter)?;
-    let its_root_pda_account = next_account_info(accounts_iter)?;
-
-    validate_system_account_key(system_program.key)?;
-
-    let its_root_config = InterchainTokenService::load(its_root_pda_account)?;
-    assert_valid_its_root_pda(its_root_pda_account, its_root_config.bump)?;
+    let its_root_config = InterchainTokenService::load(its_execute_accounts.its_root_pda)?;
+    assert_valid_its_root_pda(its_execute_accounts.its_root_pda, its_root_config.bump)?;
     assert_its_not_paused(&its_root_config)?;
 
     if message.source_address != its_root_config.its_hub_address {
@@ -51,7 +43,9 @@ pub(crate) fn process_execute<'a>(
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    let payload_account_data = payload_account.try_borrow_data()?;
+    let payload_account_data = its_execute_accounts
+        .gateway_payload_account
+        .try_borrow_data()?;
     let message_payload: ImmutMessagePayload<'_> = (**payload_account_data).try_into()?;
 
     let GMPPayload::ReceiveFromHub(inner) = GMPPayload::decode(message_payload.raw_payload)
@@ -69,34 +63,25 @@ pub(crate) fn process_execute<'a>(
     let payload =
         GMPPayload::decode(&inner.payload).map_err(|_err| ProgramError::InvalidInstructionData)?;
 
-    validate_its_accounts(instruction_accounts, &payload)?;
+    validate_its_accounts(&its_execute_accounts.its_accounts(), &payload)?;
 
     match payload {
         GMPPayload::InterchainTransfer(transfer) => process_inbound_transfer(
+            its_execute_accounts.try_into()?,
             message,
-            payer,
-            payload_account,
-            instruction_accounts,
             &transfer,
             inner.source_chain,
         ),
-        GMPPayload::DeployInterchainToken(deploy) => {
-            let parsed_accounts = DeployInterchainTokenAccounts::from_account_info_slice(
-                instruction_accounts,
-                &Some(payer),
-            )?;
-
-            interchain_token::process_inbound_deploy(
-                parsed_accounts,
-                deploy.token_id.0,
-                deploy.name,
-                deploy.symbol,
-                deploy.decimals,
-                0,
-            )
-        }
+        GMPPayload::DeployInterchainToken(deploy) => interchain_token::process_inbound_deploy(
+            its_execute_accounts.try_into()?,
+            deploy.token_id.0,
+            deploy.name,
+            deploy.symbol,
+            deploy.decimals,
+            0,
+        ),
         GMPPayload::LinkToken(payload) => {
-            link_token::process_inbound(payer, instruction_accounts, &payload)
+            link_token::process_inbound(its_execute_accounts.try_into()?, &payload)
         }
         GMPPayload::SendToHub(_)
         | GMPPayload::ReceiveFromHub(_)
@@ -104,55 +89,9 @@ pub(crate) fn process_execute<'a>(
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct GmpAccounts<'a> {
-    pub(crate) gateway_root_account: &'a AccountInfo<'a>,
-    pub(crate) gateway_program_id: &'a AccountInfo<'a>,
-    pub(crate) gas_service_config_account: &'a AccountInfo<'a>,
-    pub(crate) _gas_service: &'a AccountInfo<'a>,
-    pub(crate) system_program: &'a AccountInfo<'a>,
-    pub(crate) its_root_account: &'a AccountInfo<'a>,
-    pub(crate) call_contract_signing_account: &'a AccountInfo<'a>,
-    pub(crate) program_account: &'a AccountInfo<'a>,
-}
-
-impl Validate for GmpAccounts<'_> {
-    fn validate(&self) -> Result<(), ProgramError> {
-        validate_system_account_key(self.system_program.key)?;
-        axelar_solana_gateway::check_program_account(*self.gateway_program_id.key)?;
-
-        Ok(())
-    }
-}
-
-impl<'a> FromAccountInfoSlice<'a> for GmpAccounts<'a> {
-    type Context = ();
-
-    fn extract_accounts(
-        accounts: &'a [AccountInfo<'a>],
-        _context: &Self::Context,
-    ) -> Result<Self, ProgramError>
-    where
-        Self: Sized + Validate,
-    {
-        let accounts_iter = &mut accounts.iter();
-
-        Ok(Self {
-            gateway_root_account: next_account_info(accounts_iter)?,
-            gateway_program_id: next_account_info(accounts_iter)?,
-            gas_service_config_account: next_account_info(accounts_iter)?,
-            _gas_service: next_account_info(accounts_iter)?,
-            system_program: next_account_info(accounts_iter)?,
-            its_root_account: next_account_info(accounts_iter)?,
-            call_contract_signing_account: next_account_info(accounts_iter)?,
-            program_account: next_account_info(accounts_iter)?,
-        })
-    }
-}
-
-pub(crate) fn process_outbound<'a>(
+pub(crate) fn process_call_contract<'a>(
     payer: &'a AccountInfo<'a>,
-    accounts: &GmpAccounts<'a>,
+    accounts: &CallContractAccounts<'a>,
     payload: &GMPPayload,
     destination_chain: String,
     gas_value: u64,
@@ -208,6 +147,7 @@ pub(crate) fn process_outbound<'a>(
         pay_gas(
             payer,
             accounts.gas_service_config_account,
+            accounts.gas_service_event_authority,
             accounts.system_program,
             payload_hash,
             its_root_config.its_hub_address,
@@ -221,6 +161,7 @@ pub(crate) fn process_outbound<'a>(
             accounts.program_account.clone(),
             accounts.call_contract_signing_account.clone(),
             accounts.gateway_root_account.clone(),
+            accounts.gateway_event_authority.clone(),
         ],
         &[&[
             axelar_solana_gateway::seed_prefixes::CALL_CONTRACT_SIGNING_SEED,
@@ -234,6 +175,7 @@ pub(crate) fn process_outbound<'a>(
 fn pay_gas<'a>(
     payer: &'a AccountInfo<'a>,
     gas_service_config: &'a AccountInfo<'a>,
+    gas_service_event_authority: &'a AccountInfo<'a>,
     system_program: &'a AccountInfo<'a>,
     payload_hash: [u8; 32],
     its_hub_address: String,
@@ -255,6 +197,7 @@ fn pay_gas<'a>(
             payer.clone(),
             gas_service_config.clone(),
             system_program.clone(),
+            gas_service_event_authority.clone(),
         ],
     )
 }
@@ -284,10 +227,12 @@ fn validate_its_accounts(accounts: &[AccountInfo<'_>], payload: &GMPPayload) -> 
         match element {
             itertools::EitherOrBoth::Both(provided, derived) => {
                 if provided.key != &derived.pubkey {
+                    msg!("Mismatch");
                     return Err(ProgramError::InvalidAccountData);
                 }
             }
             itertools::EitherOrBoth::Left(_) | itertools::EitherOrBoth::Right(_) => {
+                msg!("Size mismatch");
                 return Err(ProgramError::InvalidAccountData);
             }
         }

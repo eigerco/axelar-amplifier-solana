@@ -1,4 +1,4 @@
-use event_utils::Event as _;
+use anyhow::anyhow;
 use mpl_token_metadata::accounts::Metadata;
 use mpl_token_metadata::instructions::CreateV1Builder;
 use mpl_token_metadata::types::TokenStandard;
@@ -6,7 +6,7 @@ use solana_program_test::tokio;
 use solana_sdk::instruction::Instruction;
 use test_context::test_context;
 
-use crate::ItsTestContext;
+use crate::{find_event_in_inner_instructions, ItsTestContext};
 
 #[test_context(ItsTestContext)]
 #[tokio::test]
@@ -26,18 +26,24 @@ async fn test_deploy_remote_interchain_token_with_valid_metadata(
         Some(ctx.solana_wallet),
     )?;
 
-    let tx = ctx
-        .send_solana_tx(&[deploy_local_ix])
+    let simulation_result = ctx.simulate_solana_tx(&[deploy_local_ix.clone()]).await;
+    let inner_ixs = simulation_result
+        .simulation_details
+        .unwrap()
+        .inner_instructions
+        .unwrap()
+        .first()
+        .cloned()
+        .unwrap();
+    let deploy_event = find_event_in_inner_instructions::<
+        axelar_solana_its::events::InterchainTokenDeployed,
+    >(&inner_ixs)
+    .ok_or_else(|| anyhow!("InterchainTokenDeployed not found"))
+    .unwrap();
+
+    ctx.send_solana_tx(&[deploy_local_ix])
         .await
         .expect("InterchainToken deployment failed");
-
-    let deploy_event = tx
-        .metadata
-        .unwrap()
-        .log_messages
-        .iter()
-        .find_map(|log| axelar_solana_its::event::InterchainTokenDeployed::try_from_log(log).ok())
-        .unwrap();
 
     assert_eq!(
         deploy_event.name, "Valid Metadata Token",
@@ -71,6 +77,21 @@ async fn test_deploy_remote_interchain_token_with_valid_metadata(
             0,
         )?;
 
+    let simulation_result = ctx.simulate_solana_tx(&[deploy_remote_ix.clone()]).await;
+    let inner_ixs = simulation_result
+        .simulation_details
+        .unwrap()
+        .inner_instructions
+        .unwrap()
+        .first()
+        .cloned()
+        .unwrap();
+    let deployment_started_event = find_event_in_inner_instructions::<
+        axelar_solana_its::events::InterchainTokenDeploymentStarted,
+    >(&inner_ixs)
+    .ok_or_else(|| anyhow!("InterchainTokenDeploymentStarted not found"))
+    .unwrap();
+
     let tx = ctx.send_solana_tx(&[deploy_remote_ix]).await;
 
     // Transaction should succeed
@@ -78,17 +99,6 @@ async fn test_deploy_remote_interchain_token_with_valid_metadata(
         tx.is_ok(),
         "Expected deployment to succeed with valid metadata"
     );
-
-    let tx = tx.unwrap();
-    let deployment_started_event = tx
-        .metadata
-        .unwrap()
-        .log_messages
-        .iter()
-        .find_map(|log| {
-            axelar_solana_its::event::InterchainTokenDeploymentStarted::try_from_log(log).ok()
-        })
-        .unwrap();
 
     assert_eq!(
         deployment_started_event.token_name, "Valid Metadata Token",

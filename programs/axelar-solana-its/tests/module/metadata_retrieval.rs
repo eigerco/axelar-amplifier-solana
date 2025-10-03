@@ -1,4 +1,4 @@
-use event_utils::Event as _;
+use anyhow::anyhow;
 use mpl_token_metadata::accounts::Metadata;
 use mpl_token_metadata::instructions::CreateV1Builder;
 use mpl_token_metadata::types::TokenStandard;
@@ -14,7 +14,7 @@ use spl_token_2022::state::Mint;
 use spl_token_metadata_interface::instruction::initialize as initialize_token_metadata;
 use test_context::test_context;
 
-use crate::ItsTestContext;
+use crate::{find_event_in_inner_instructions, ItsTestContext};
 
 /// Tests metadata retrieval with Metaplex metadata (fallback scenario)
 #[test_context(ItsTestContext)]
@@ -36,18 +36,24 @@ async fn test_metadata_retrieval_with_metaplex_fallback(
     )
     .unwrap();
 
-    let tx = ctx
-        .send_solana_tx(&[deploy_local_ix])
+    let simulation_result = ctx.simulate_solana_tx(&[deploy_local_ix.clone()]).await;
+    let inner_ixs = simulation_result
+        .simulation_details
+        .unwrap()
+        .inner_instructions
+        .unwrap()
+        .first()
+        .cloned()
+        .unwrap();
+    let deploy_event = find_event_in_inner_instructions::<
+        axelar_solana_its::events::InterchainTokenDeployed,
+    >(&inner_ixs)
+    .ok_or_else(|| anyhow!("InterchainTokenDeployed not found"))
+    .unwrap();
+
+    ctx.send_solana_tx(&[deploy_local_ix])
         .await
         .expect("InterchainToken deployment failed");
-
-    let deploy_event = tx
-        .metadata
-        .unwrap()
-        .log_messages
-        .iter()
-        .find_map(|log| axelar_solana_its::event::InterchainTokenDeployed::try_from_log(log).ok())
-        .unwrap();
 
     assert_eq!(
         deploy_event.name, "Metaplex Fallback Token",
@@ -83,6 +89,21 @@ async fn test_metadata_retrieval_with_metaplex_fallback(
         )
         .unwrap();
 
+    let simulation_result = ctx.simulate_solana_tx(&[deploy_remote_ix.clone()]).await;
+    let inner_ixs = simulation_result
+        .simulation_details
+        .unwrap()
+        .inner_instructions
+        .unwrap()
+        .first()
+        .cloned()
+        .unwrap();
+    let deployment_started_event = find_event_in_inner_instructions::<
+        axelar_solana_its::events::InterchainTokenDeploymentStarted,
+    >(&inner_ixs)
+    .ok_or_else(|| anyhow!("InterchainTokenDeploymentStarted not found"))
+    .unwrap();
+
     let tx = ctx.send_solana_tx(&[deploy_remote_ix]).await;
 
     // Transaction should succeed using Metaplex fallback
@@ -90,18 +111,6 @@ async fn test_metadata_retrieval_with_metaplex_fallback(
         tx.is_ok(),
         "Expected deployment to succeed with Metaplex metadata fallback"
     );
-
-    let tx = tx.unwrap();
-    let deployment_started_event = tx
-        .metadata
-        .as_ref()
-        .unwrap()
-        .log_messages
-        .iter()
-        .find_map(|log| {
-            axelar_solana_its::event::InterchainTokenDeploymentStarted::try_from_log(log).ok()
-        })
-        .unwrap();
 
     // Verify that the correct metadata was read from Metaplex
     assert_eq!(
@@ -214,6 +223,23 @@ async fn test_metadata_retrieval_with_token_2022_embedded(
         )
         .unwrap();
 
+    let simulation_result = ctx
+        .simulate_solana_tx(&[deploy_remote_canonical_ix.clone()])
+        .await;
+    let inner_ixs = simulation_result
+        .simulation_details
+        .unwrap()
+        .inner_instructions
+        .unwrap()
+        .first()
+        .cloned()
+        .unwrap();
+    let deployment_started_event = find_event_in_inner_instructions::<
+        axelar_solana_its::events::InterchainTokenDeploymentStarted,
+    >(&inner_ixs)
+    .ok_or_else(|| anyhow!("InterchainTokenDeploymentStarted not found"))
+    .unwrap();
+
     let tx = ctx.send_solana_tx(&[deploy_remote_canonical_ix]).await;
 
     // Transaction should succeed using Token 2022 embedded metadata
@@ -222,18 +248,6 @@ async fn test_metadata_retrieval_with_token_2022_embedded(
         "Expected deployment to succeed with Token 2022 embedded metadata: {:?}",
         tx.as_ref().err()
     );
-
-    let tx = tx.unwrap();
-    let deployment_started_event = tx
-        .metadata
-        .as_ref()
-        .unwrap()
-        .log_messages
-        .iter()
-        .find_map(|log| {
-            axelar_solana_its::event::InterchainTokenDeploymentStarted::try_from_log(log).ok()
-        })
-        .unwrap();
 
     // Verify that the correct metadata was read from Token 2022 extensions, not Metaplex
     assert_eq!(
@@ -308,17 +322,25 @@ async fn test_metadata_retrieval_with_token_2022_external_pointer(
         )
         .unwrap();
 
-    let tx = ctx.send_solana_tx(&[deploy_remote_canonical_ix]).await;
-    let tx = tx.unwrap();
-    let deployment_started_event = tx
-        .metadata
-        .as_ref()
+    let simulation_result = ctx
+        .simulate_solana_tx(&[deploy_remote_canonical_ix.clone()])
+        .await;
+    let inner_ixs = simulation_result
+        .simulation_details
         .unwrap()
-        .log_messages
-        .iter()
-        .find_map(|log| {
-            axelar_solana_its::event::InterchainTokenDeploymentStarted::try_from_log(log).ok()
-        })
+        .inner_instructions
+        .unwrap()
+        .first()
+        .cloned()
+        .unwrap();
+    let deployment_started_event = find_event_in_inner_instructions::<
+        axelar_solana_its::events::InterchainTokenDeploymentStarted,
+    >(&inner_ixs)
+    .ok_or_else(|| anyhow!("InterchainTokenDeploymentStarted not found"))
+    .unwrap();
+
+    ctx.send_solana_tx(&[deploy_remote_canonical_ix])
+        .await
         .unwrap();
 
     // Verify that the correct metadata was read from Metaplex fallback

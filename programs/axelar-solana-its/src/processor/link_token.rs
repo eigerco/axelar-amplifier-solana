@@ -1,6 +1,6 @@
 //! This module is responsible for functions related to custom token linking
 
-use event_utils::Event as _;
+use event_cpi_macros::{emit_cpi, event_cpi_accounts};
 use interchain_token_transfer_gmp::{GMPPayload, LinkToken, RegisterTokenMetadata};
 use program_utils::pda::BorshPda;
 use solana_program::account_info::{next_account_info, AccountInfo};
@@ -12,19 +12,22 @@ use solana_program::pubkey::Pubkey;
 use spl_token_2022::extension::{BaseStateWithExtensions, ExtensionType, StateWithExtensions};
 use spl_token_2022::state::Mint;
 
-use crate::processor::gmp::{self, GmpAccounts};
+use crate::accounts::{
+    CallContractAccounts, DeployCanonicalTokenAccounts, DeployCustomTokenAccounts,
+    DeployTokenManagerAccounts,
+};
+use crate::processor::gmp;
 use crate::processor::interchain_token;
-use crate::processor::token_manager::{DeployTokenManagerAccounts, DeployTokenManagerInternal};
+use crate::processor::token_manager::DeployTokenManagerInternal;
 use crate::state::token_manager::TokenManager;
 use crate::state::{token_manager, InterchainTokenService};
 use crate::{
-    assert_its_not_paused, assert_valid_its_root_pda, assert_valid_token_manager_pda, event,
-    FromAccountInfoSlice,
+    assert_its_not_paused, assert_valid_its_root_pda, assert_valid_token_manager_pda, events,
 };
+use event_cpi::EventAccounts;
 
 pub(crate) fn process_inbound<'a>(
-    payer: &'a AccountInfo<'a>,
-    accounts: &'a [AccountInfo<'a>],
+    accounts: DeployTokenManagerAccounts<'a>,
     payload: &LinkToken,
 ) -> ProgramResult {
     let token_manager_type: token_manager::Type = payload.token_manager_type.try_into()?;
@@ -52,17 +55,15 @@ pub(crate) fn process_inbound<'a>(
         None,
     );
 
-    let parsed_accounts =
-        DeployTokenManagerAccounts::from_account_info_slice(accounts, &Some(payer))?;
-    let its_root_pda_bump = InterchainTokenService::load(parsed_accounts.its_root_pda)?.bump;
+    let its_root_pda_bump = InterchainTokenService::load(accounts.its_root_pda)?.bump;
 
-    assert_valid_its_root_pda(parsed_accounts.its_root_pda, its_root_pda_bump)?;
+    assert_valid_its_root_pda(accounts.its_root_pda, its_root_pda_bump)?;
 
     let (_, token_manager_pda_bump) =
-        crate::find_token_manager_pda(parsed_accounts.its_root_pda.key, payload.token_id.as_ref());
+        crate::find_token_manager_pda(accounts.its_root_pda.key, payload.token_id.as_ref());
 
     crate::processor::token_manager::deploy(
-        &parsed_accounts,
+        &accounts,
         &deploy_token_manager,
         token_manager_pda_bump,
     )
@@ -78,15 +79,11 @@ pub(crate) fn process_outbound<'a>(
     gas_value: u64,
     signing_pda_bump: u8,
 ) -> ProgramResult {
-    const OUTBOUND_MESSAGE_ACCOUNTS_IDX: usize = 3;
-
-    let ([payer, deployer, token_manager_account], outbound_message_accounts) =
-        accounts.split_at(OUTBOUND_MESSAGE_ACCOUNTS_IDX)
-    else {
-        return Err(ProgramError::NotEnoughAccountKeys);
-    };
-
-    let gmp_accounts = GmpAccounts::from_account_info_slice(outbound_message_accounts, &())?;
+    let accounts_iter = &mut accounts.iter();
+    let payer = next_account_info(accounts_iter)?;
+    let deployer = next_account_info(accounts_iter)?;
+    let token_manager_account = next_account_info(accounts_iter)?;
+    let gmp_accounts = CallContractAccounts::try_from(accounts_iter.as_slice())?;
 
     let its_root_config = InterchainTokenService::load(gmp_accounts.its_root_account)?;
     assert_valid_its_root_pda(gmp_accounts.its_root_account, its_root_config.bump)?;
@@ -109,12 +106,14 @@ pub(crate) fn process_outbound<'a>(
     let deploy_salt = crate::linked_token_deployer_salt(deployer.key, &salt);
     let token_id = crate::interchain_token_id_internal(&deploy_salt);
 
-    event::InterchainTokenIdClaimed {
+    let event_accounts_iter = &mut gmp_accounts.event_accounts().into_iter();
+    event_cpi_accounts!(event_accounts_iter);
+
+    emit_cpi!(events::InterchainTokenIdClaimed {
         token_id,
         deployer: *deployer.key,
         salt: deploy_salt,
-    }
-    .emit();
+    });
 
     let token_manager = TokenManager::load(token_manager_account)?;
 
@@ -125,7 +124,7 @@ pub(crate) fn process_outbound<'a>(
         token_manager.bump,
     )?;
 
-    let link_started_event = event::LinkTokenStarted {
+    let link_started_events = events::LinkTokenStarted {
         token_id,
         destination_chain,
         source_token_address: token_manager.token_address,
@@ -133,7 +132,7 @@ pub(crate) fn process_outbound<'a>(
         token_manager_type: token_manager_type.into(),
         params: link_params,
     };
-    link_started_event.emit();
+    emit_cpi!(link_started_events);
 
     let message = GMPPayload::LinkToken(LinkToken {
         selector: LinkToken::MESSAGE_TYPE_ID
@@ -142,15 +141,15 @@ pub(crate) fn process_outbound<'a>(
         token_id: token_id.into(),
         token_manager_type: token_manager_type.into(),
         source_token_address: token_manager.token_address.to_bytes().into(),
-        destination_token_address: link_started_event.destination_token_address.into(),
-        link_params: link_started_event.params.into(),
+        destination_token_address: link_started_events.destination_token_address.into(),
+        link_params: link_started_events.params.into(),
     });
 
-    gmp::process_outbound(
+    gmp::process_call_contract(
         payer,
         &gmp_accounts,
         &message,
-        link_started_event.destination_chain,
+        link_started_events.destination_chain,
         gas_value,
         signing_pda_bump,
         true,
@@ -166,15 +165,15 @@ pub(crate) fn register_token_metadata<'a>(
     gas_value: u64,
     signing_pda_bump: u8,
 ) -> ProgramResult {
-    const OUTBOUND_MESSAGE_ACCOUNTS_IDX: usize = 2;
-
     let accounts_iter = &mut accounts.iter();
     let payer = next_account_info(accounts_iter)?;
     let mint_account = next_account_info(accounts_iter)?;
 
-    let (_other, outbound_message_accounts) = accounts.split_at(OUTBOUND_MESSAGE_ACCOUNTS_IDX);
-    let gmp_accounts = GmpAccounts::from_account_info_slice(outbound_message_accounts, &())?;
+    let gmp_accounts = CallContractAccounts::try_from(accounts_iter.as_slice())?;
     msg!("Instruction: RegisterTokenMetadata");
+
+    let event_accounts_iter = &mut gmp_accounts.event_accounts().into_iter();
+    event_cpi_accounts!(event_accounts_iter);
 
     let mint_data = mint_account.try_borrow_data()?;
     let mint = StateWithExtensions::<Mint>::unpack(&mint_data)?;
@@ -186,13 +185,12 @@ pub(crate) fn register_token_metadata<'a>(
         decimals: mint.base.decimals,
     });
 
-    event::TokenMetadataRegistered {
+    emit_cpi!(events::TokenMetadataRegistered {
         token_address: *mint_account.key,
         decimals: mint.base.decimals,
-    }
-    .emit();
+    });
 
-    gmp::process_outbound(
+    gmp::process_call_contract(
         payer,
         &gmp_accounts,
         &payload,
@@ -213,125 +211,102 @@ pub(crate) fn register_custom_token<'a>(
         return Err(ProgramError::InvalidInstructionData);
     }
 
+    let custom_accounts = DeployCustomTokenAccounts::try_from(accounts)?;
+
+    msg!("Instruction: RegisterCustomToken");
+
+    let its_config = InterchainTokenService::load(custom_accounts.its_root_pda)?;
+    assert_valid_its_root_pda(custom_accounts.its_root_pda, its_config.bump)?;
+    assert_its_not_paused(&its_config)?;
+
+    let deployer = *custom_accounts.deployer.key;
+    let deploy_salt = crate::linked_token_deployer_salt(&deployer, &salt);
+
     register_token(
-        accounts,
-        &TokenRegistration::Custom {
-            salt,
-            token_manager_type,
-            operator,
-        },
+        custom_accounts.try_into()?,
+        token_manager_type,
+        deployer,
+        operator,
+        deploy_salt,
     )
 }
 
 pub(crate) fn register_canonical_interchain_token<'a>(
     accounts: &'a [AccountInfo<'a>],
 ) -> ProgramResult {
-    register_token(accounts, &TokenRegistration::Canonical)
-}
+    let accounts = DeployCanonicalTokenAccounts::try_from(accounts)?;
 
-enum TokenRegistration {
-    Canonical,
-    Custom {
-        salt: [u8; 32],
-        token_manager_type: token_manager::Type,
-        operator: Option<Pubkey>,
-    },
-}
+    msg!("Instruction: RegisterCanonicalInterchainToken");
 
-fn register_token<'a>(
-    accounts: &'a [AccountInfo<'a>],
-    registration: &TokenRegistration,
-) -> ProgramResult {
-    const DEPLOY_TOKEN_MANAGER_ACCOUNTS_IDX: usize = 2;
-
-    let ([payer, registration_specific_account], deploy_token_manager_accounts) =
-        accounts.split_at(DEPLOY_TOKEN_MANAGER_ACCOUNTS_IDX)
-    else {
-        return Err(ProgramError::NotEnoughAccountKeys);
-    };
-
-    let parsed_accounts = DeployTokenManagerAccounts::from_account_info_slice(
-        deploy_token_manager_accounts,
-        &Some(payer),
-    )?;
-
-    msg!("Instruction: RegisterToken");
-
-    let its_config = InterchainTokenService::load(parsed_accounts.its_root_pda)?;
-    assert_valid_its_root_pda(parsed_accounts.its_root_pda, its_config.bump)?;
+    let its_config = InterchainTokenService::load(accounts.its_root_pda)?;
+    assert_valid_its_root_pda(accounts.its_root_pda, its_config.bump)?;
     assert_its_not_paused(&its_config)?;
-    let mint_data = parsed_accounts.token_mint.try_borrow_data()?;
+
+    if let Err(_err) =
+        interchain_token::get_token_metadata(accounts.token_mint, Some(accounts.metadata_account))
+    {
+        return Err(ProgramError::InvalidAccountData);
+    }
+
+    let mint_data = accounts.token_mint.try_borrow_data()?;
     let mint = StateWithExtensions::<Mint>::unpack(&mint_data)?;
     let has_fee_extension = mint
         .get_extension_types()?
         .contains(&ExtensionType::TransferFeeConfig);
 
-    let (token_manager_type, operator, deploy_salt) = match *registration {
-        TokenRegistration::Canonical => {
-            let metadata_account = registration_specific_account;
-
-            // Metadata is required for canonical tokens
-            if let Err(_err) = interchain_token::get_token_metadata(
-                parsed_accounts.token_mint,
-                Some(metadata_account),
-            ) {
-                return Err(ProgramError::InvalidAccountData);
-            }
-
-            let token_manager_type = if has_fee_extension {
-                token_manager::Type::LockUnlockFee
-            } else {
-                token_manager::Type::LockUnlock
-            };
-
-            (
-                token_manager_type,
-                None,
-                crate::canonical_interchain_token_deploy_salt(parsed_accounts.token_mint.key),
-            )
-        }
-        TokenRegistration::Custom {
-            salt,
-            token_manager_type,
-            operator,
-        } => {
-            let deployer = registration_specific_account;
-
-            (
-                token_manager_type,
-                operator,
-                crate::linked_token_deployer_salt(deployer.key, &salt),
-            )
-        }
+    let token_manager_type = if has_fee_extension {
+        token_manager::Type::LockUnlockFee
+    } else {
+        token_manager::Type::LockUnlock
     };
+
+    let deploy_salt = crate::canonical_interchain_token_deploy_salt(accounts.token_mint.key);
+
+    register_token(
+        accounts.try_into()?,
+        token_manager_type,
+        crate::ID,
+        None,
+        deploy_salt,
+    )
+}
+
+fn register_token<'a>(
+    accounts: DeployTokenManagerAccounts<'a>,
+    token_manager_type: token_manager::Type,
+    deployer: Pubkey,
+    operator: Option<Pubkey>,
+    deploy_salt: [u8; 32],
+) -> ProgramResult {
+    let event_accounts_iter = &mut accounts.event_accounts().into_iter();
+    event_cpi_accounts!(event_accounts_iter);
 
     let token_id = crate::interchain_token_id_internal(&deploy_salt);
     let (_, token_manager_pda_bump) =
-        crate::find_token_manager_pda(parsed_accounts.its_root_pda.key, &token_id);
+        crate::find_token_manager_pda(accounts.its_root_pda.key, &token_id);
     crate::assert_valid_token_manager_pda(
-        parsed_accounts.token_manager_pda,
-        parsed_accounts.its_root_pda.key,
+        accounts.token_manager_pda,
+        accounts.its_root_pda.key,
         &token_id,
         token_manager_pda_bump,
     )?;
 
-    event::InterchainTokenIdClaimed {
+    emit_cpi!(events::InterchainTokenIdClaimed {
         token_id,
-        deployer: *payer.key,
+        deployer: deployer,
         salt: deploy_salt,
-    }
-    .emit();
+    });
 
     let deploy_token_manager = DeployTokenManagerInternal::new(
         token_manager_type,
         token_id,
-        *parsed_accounts.token_mint.key,
+        *accounts.token_mint.key,
         operator,
         None,
     );
 
     crate::processor::token_manager::deploy(
-        &parsed_accounts,
+        &accounts,
         &deploy_token_manager,
         token_manager_pda_bump,
     )?;

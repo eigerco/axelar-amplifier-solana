@@ -24,7 +24,7 @@ pub const AXELAR_EXECUTE: &[u8; 16] = b"axelar-execute__";
 
 /// The index of the first account that is expected to be passed to the
 /// destination program.
-pub const PROGRAM_ACCOUNTS_START_INDEX: usize = 5;
+pub const PROGRAM_ACCOUNTS_START_INDEX: usize = 6;
 
 /// Perform CPI call to the Axelar Gateway to ensure that the given message is
 /// approved.
@@ -202,6 +202,7 @@ fn validate_message_internal(
     let gateway_incoming_message = next_account_info(account_info_iter)?;
     let _message_payload_pda = next_account_info(account_info_iter)?; // skip this one, we don't need it
     let signing_pda = next_account_info(account_info_iter)?;
+    let gateway_event_authority = next_account_info(account_info_iter)?;
     let _gateway_program_id = next_account_info(account_info_iter)?;
 
     // Build the actual Message we are going to use
@@ -220,7 +221,11 @@ fn validate_message_internal(
             signing_pda.key,
             message.clone(),
         )?,
-        &[gateway_incoming_message.clone(), signing_pda.clone()],
+        &[
+            gateway_incoming_message.clone(),
+            signing_pda.clone(),
+            gateway_event_authority.clone(),
+        ],
         &[&[
             crate::seed_prefixes::VALIDATE_MESSAGE_SIGNING_SEED,
             &command_id,

@@ -1,10 +1,10 @@
+use anyhow::anyhow;
 use axelar_solana_gateway_test_fixtures::assert_msg_present_in_logs;
-use event_utils::Event;
 use evm_contracts_test_suite::ethers::signers::Signer;
 use solana_program_test::tokio;
 use test_context::test_context;
 
-use crate::ItsTestContext;
+use crate::{find_event_in_inner_instructions, ItsTestContext};
 
 #[test_context(ItsTestContext)]
 #[tokio::test]
@@ -108,18 +108,24 @@ async fn test_local_deployment_succeeds_with_valid_lengths(
         Some(ctx.solana_wallet),
     )?;
 
+    let simulation_result = ctx.simulate_solana_tx(&[deploy_ix.clone()]).await;
+    let inner_ixs = simulation_result
+        .simulation_details
+        .unwrap()
+        .inner_instructions
+        .unwrap()
+        .first()
+        .cloned()
+        .unwrap();
+    let deploy_event = find_event_in_inner_instructions::<
+        axelar_solana_its::events::InterchainTokenDeployed,
+    >(&inner_ixs)
+    .ok_or_else(|| anyhow!("InterchainTokenDeployed not found"))
+    .unwrap();
+
     let result = ctx.send_solana_tx(&[deploy_ix]).await;
 
     assert!(result.is_ok());
-
-    let tx = result.unwrap();
-    let deploy_event = tx
-        .metadata
-        .unwrap()
-        .log_messages
-        .iter()
-        .find_map(|log| axelar_solana_its::event::InterchainTokenDeployed::try_from_log(log).ok())
-        .unwrap();
 
     assert_eq!(deploy_event.name, valid_name);
     assert_eq!(deploy_event.symbol, valid_symbol);
@@ -147,18 +153,24 @@ async fn test_local_deployment_succeeds_with_max_lengths(
         Some(ctx.solana_wallet),
     )?;
 
+    let simulation_result = ctx.simulate_solana_tx(&[deploy_ix.clone()]).await;
+    let inner_ixs = simulation_result
+        .simulation_details
+        .unwrap()
+        .inner_instructions
+        .unwrap()
+        .first()
+        .cloned()
+        .unwrap();
+    let deploy_event = find_event_in_inner_instructions::<
+        axelar_solana_its::events::InterchainTokenDeployed,
+    >(&inner_ixs)
+    .ok_or_else(|| anyhow!("InterchainTokenDeployed not found"))
+    .unwrap();
+
     let result = ctx.send_solana_tx(&[deploy_ix]).await;
 
     assert!(result.is_ok());
-
-    let tx = result.unwrap();
-    let deploy_event = tx
-        .metadata
-        .unwrap()
-        .log_messages
-        .iter()
-        .find_map(|log| axelar_solana_its::event::InterchainTokenDeployed::try_from_log(log).ok())
-        .unwrap();
 
     assert_eq!(deploy_event.name, max_name);
     assert_eq!(deploy_event.symbol, max_symbol);
@@ -212,7 +224,7 @@ async fn test_incoming_deployment_truncates_long_name(
         .expect("Should have contract call");
 
     // Relay the deployment message to Solana
-    let result = ctx
+    let (inner_ixs, result) = ctx
         .relay_to_solana(log.payload.as_ref(), None, spl_token_2022::id())
         .await;
 
@@ -223,11 +235,10 @@ async fn test_incoming_deployment_truncates_long_name(
     );
 
     // Verify the deployment event shows truncated name (32 characters)
-    let logs = result.metadata.unwrap().log_messages;
-    let deploy_event = logs
-        .iter()
-        .find_map(|log| axelar_solana_its::event::InterchainTokenDeployed::try_from_log(log).ok())
-        .expect("Should emit InterchainTokenDeployed event");
+    let deploy_event = crate::find_event_in_inner_instructions::<
+        axelar_solana_its::events::InterchainTokenDeployed,
+    >(&inner_ixs)
+    .expect("Should emit InterchainTokenDeployed event");
 
     assert_eq!(
         deploy_event.name.len(),
@@ -289,7 +300,7 @@ async fn test_incoming_deployment_truncates_long_symbol(
         .expect("Should have contract call");
 
     // Relay the deployment message to Solana
-    let result = ctx
+    let (inner_ixs, result) = ctx
         .relay_to_solana(log.payload.as_ref(), None, spl_token_2022::id())
         .await;
 
@@ -297,11 +308,10 @@ async fn test_incoming_deployment_truncates_long_symbol(
     assert!(result.metadata.is_some());
 
     // Verify the deployment event shows truncated symbol (10 characters)
-    let logs = result.metadata.unwrap().log_messages;
-    let deploy_event = logs
-        .iter()
-        .find_map(|log| axelar_solana_its::event::InterchainTokenDeployed::try_from_log(log).ok())
-        .expect("Should emit InterchainTokenDeployed event");
+    let deploy_event = crate::find_event_in_inner_instructions::<
+        axelar_solana_its::events::InterchainTokenDeployed,
+    >(&inner_ixs)
+    .expect("Should emit InterchainTokenDeployed event");
 
     assert_eq!(deploy_event.name, valid_name);
     assert_eq!(deploy_event.symbol.len(), 10);
@@ -356,18 +366,17 @@ async fn test_incoming_deployment_truncates_long_name_and_symbol(
         .expect("Should have contract call");
 
     // Relay the deployment message to Solana
-    let result = ctx
+    let (inner_ixs, result) = ctx
         .relay_to_solana(log.payload.as_ref(), None, spl_token_2022::id())
         .await;
 
     assert!(result.metadata.is_some());
 
     // Verify the deployment event shows both name and symbol truncated
-    let logs = result.metadata.unwrap().log_messages;
-    let deploy_event = logs
-        .iter()
-        .find_map(|log| axelar_solana_its::event::InterchainTokenDeployed::try_from_log(log).ok())
-        .expect("Should emit InterchainTokenDeployed event");
+    let deploy_event = crate::find_event_in_inner_instructions::<
+        axelar_solana_its::events::InterchainTokenDeployed,
+    >(&inner_ixs)
+    .expect("Should emit InterchainTokenDeployed event");
 
     assert_eq!(deploy_event.name.len(), 32);
     assert_eq!(&deploy_event.name, "This is another extremely long t");
@@ -427,18 +436,17 @@ async fn test_incoming_deployment_succeeds_with_valid_lengths(
         .expect("Should have contract call");
 
     // Relay the deployment message to Solana
-    let result = ctx
+    let (inner_ixs, result) = ctx
         .relay_to_solana(log.payload.as_ref(), None, spl_token_2022::id())
         .await;
 
     assert!(result.metadata.is_some());
 
     // Verify the deployment event shows original name and symbol
-    let logs = result.metadata.unwrap().log_messages;
-    let deploy_event = logs
-        .iter()
-        .find_map(|log| axelar_solana_its::event::InterchainTokenDeployed::try_from_log(log).ok())
-        .expect("Should emit InterchainTokenDeployed event");
+    let deploy_event = crate::find_event_in_inner_instructions::<
+        axelar_solana_its::events::InterchainTokenDeployed,
+    >(&inner_ixs)
+    .expect("Should emit InterchainTokenDeployed event");
 
     assert_eq!(deploy_event.name, valid_name);
     assert_eq!(deploy_event.symbol, valid_symbol);

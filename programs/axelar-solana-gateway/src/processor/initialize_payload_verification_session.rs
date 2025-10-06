@@ -15,6 +15,7 @@ use crate::{
     assert_valid_gateway_root_pda, assert_valid_verifier_set_tracker_pda,
     get_verifier_set_tracker_pda, seed_prefixes,
 };
+use crate::{assert_initialized_and_valid_gateway_root_pda, seed_prefixes};
 
 impl Processor {
     /// Initializes a signature verification session PDA account for a given Axelar payload (former

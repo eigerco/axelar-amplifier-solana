@@ -7,15 +7,12 @@ use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 
 use super::Processor;
+use crate::assert_initialized_and_valid_gateway_root_pda;
 use crate::error::GatewayError;
 use crate::state::signature_verification_pda::SignatureVerificationSessionData;
 use crate::state::verifier_set_tracker::VerifierSetTracker;
 use crate::state::GatewayConfig;
-use crate::{
-    assert_valid_gateway_root_pda, assert_valid_verifier_set_tracker_pda,
-    get_verifier_set_tracker_pda, seed_prefixes,
-};
-use crate::{assert_initialized_and_valid_gateway_root_pda, seed_prefixes};
+use crate::{assert_valid_verifier_set_tracker_pda, get_verifier_set_tracker_pda, seed_prefixes};
 
 impl Processor {
     /// Initializes a signature verification session PDA account for a given Axelar payload (former
@@ -78,11 +75,7 @@ impl Processor {
         }
 
         // Check: Gateway Root PDA is initialized.
-        gateway_root_pda.check_initialized_pda_without_deserialization(program_id)?;
-        let data = gateway_root_pda.try_borrow_data()?;
-        let gateway_config =
-            GatewayConfig::read(&data).ok_or(GatewayError::BytemuckDataLenInvalid)?;
-        assert_valid_gateway_root_pda(gateway_config.bump, gateway_root_pda.key)?;
+        assert_initialized_and_valid_gateway_root_pda(gateway_root_pda)?;
 
         // Check: Signing verifier set is valid and sufficiently recent
         {
@@ -101,8 +94,15 @@ impl Processor {
                 verifier_set_tracker,
                 verifier_set_tracker_account.key,
             )?;
+
             // Check: Verifier set isn't expired
-            gateway_config.assert_valid_epoch(verifier_set_tracker.epoch)?;
+            gateway_root_pda.try_borrow_data().map(|data| {
+                GatewayConfig::read(&data)
+                    .ok_or(GatewayError::BytemuckDataLenInvalid)
+                    .and_then(|gateway_config| {
+                        gateway_config.assert_valid_epoch(verifier_set_tracker.epoch)
+                    })
+            })??;
 
             // Check: Verifier set hash matches what we expect
             if verifier_set_tracker.verifier_set_hash != signing_verifier_set_hash {

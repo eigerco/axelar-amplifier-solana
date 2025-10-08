@@ -18,6 +18,7 @@ devnet-amplifier = [
     "axelar-solana-gateway-test-fixtures/devnet-amplifier",
     "axelar-solana-gateway/devnet-amplifier",
     "axelar-solana-memo-program/devnet-amplifier",
+    "axelar-solana-its-cpi-caller/devnet-amplifier",
     "program-utils/devnet-amplifier"
 ]
 stagenet = [
@@ -25,6 +26,7 @@ stagenet = [
     "axelar-solana-gateway-test-fixtures/stagenet",
     "axelar-solana-gateway/stagenet",
     "axelar-solana-memo-program/stagenet",
+    "axelar-solana-its-cpi-caller/stagenet",
     "program-utils/stagenet"
 ]
 testnet = [
@@ -32,6 +34,7 @@ testnet = [
     "axelar-solana-gateway-test-fixtures/testnet",
     "axelar-solana-gateway/testnet",
     "axelar-solana-memo-program/testnet",
+    "axelar-solana-its-cpi-caller/testnet",
     "program-utils/testnet"
 ]
 mainnet = [
@@ -39,6 +42,7 @@ mainnet = [
     "axelar-solana-gateway-test-fixtures/mainnet",
     "axelar-solana-gateway/mainnet",
     "axelar-solana-memo-program/mainnet",
+    "axelar-solana-its-cpi-caller/mainnet",
     "program-utils/mainnet"
 ]
 default = ["devnet-amplifier"]
@@ -68,6 +72,7 @@ event-utils.workspace = true
 anyhow.workspace = true
 axelar-solana-gateway-test-fixtures.workspace = true
 axelar-solana-memo-program = { workspace = true, features = ["no-entrypoint"] }
+axelar-solana-its-cpi-caller = { workspace = true, features = ["no-entrypoint"], default-features = false }
 evm-contracts-test-suite.workspace = true
 rstest.workspace = true
 solana-program-test.workspace = true

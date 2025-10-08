@@ -19,6 +19,7 @@
     unused_must_use
 )]
 
+mod cpi_transfer;
 mod deploy_interchain_token;
 mod deploy_manager_mismatch;
 mod deploy_remote;
@@ -28,7 +29,6 @@ mod from_evm_to_solana;
 mod from_solana_to_evm;
 mod handover_mint_authority;
 mod idempotent_ata_test;
-mod memo_cpi_transfer;
 mod metadata_length_validation;
 mod metadata_retrieval;
 mod pause_unpause;
@@ -490,6 +490,10 @@ async fn axelar_solana_setup() -> (SolanaAxelarIntegrationMetadata, Pubkey) {
         (
             "axelar_solana_memo_program.so".into(),
             axelar_solana_memo_program::id(),
+        ),
+        (
+            "axelar_solana_its_cpi_caller.so".into(),
+            axelar_solana_its_cpi_caller::id(),
         ),
     ];
 

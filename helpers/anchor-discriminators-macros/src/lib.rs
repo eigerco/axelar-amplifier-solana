@@ -2,7 +2,7 @@
 extern crate proc_macro;
 
 use convert_case::{Case, Casing};
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::parse_macro_input;
 
 use anchor_discriminators::{sighash, SIGHASH_GLOBAL_NAMESPACE};
@@ -10,6 +10,8 @@ use anchor_discriminators::{sighash, SIGHASH_GLOBAL_NAMESPACE};
 // https://github.com/solana-foundation/anchor/blob/56b21edd1f4c1865e5f943537fb7f89a0ffe5ede/lang/syn/src/codegen/program/common.rs#L21
 fn gen_discriminator(namespace: &str, name: impl ToString) -> proc_macro2::TokenStream {
     let discriminator = sighash(namespace, name.to_string().as_str());
+    // NOTE: keep in mind this is missing the leading &
+    // add if needed
     format!("{discriminator:?}").parse().unwrap()
 }
 
@@ -210,4 +212,96 @@ pub fn derive_instruction_discriminator(input: proc_macro::TokenStream) -> proc_
     };
 
     proc_macro::TokenStream::from(expanded)
+}
+
+#[proc_macro_attribute]
+#[allow(clippy::wildcard_enum_match_arm)]
+pub fn account(
+    _attr: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let account_strct = parse_macro_input!(input as syn::ItemStruct);
+    let account_name = &account_strct.ident;
+    let is_zero_copy = account_strct.attrs.iter().any(|attr| {
+        attr.path.to_token_stream().to_string() == "repr"
+            && attr.tokens.to_token_stream().to_string() == "(C)"
+    });
+    let (impl_gen, type_gen, where_clause) = account_strct.generics.split_for_impl();
+
+    let discriminator = gen_discriminator(
+        anchor_discriminators::SIGHASH_ACCOUNT_NAMESPACE,
+        account_name,
+    );
+
+    // Extract field names and types for serialization/deserialization
+    let (field_names, field_types): (Vec<_>, Vec<_>) = match &account_strct.fields {
+        syn::Fields::Named(fields) => fields.named.iter().map(|f| (&f.ident, &f.ty)).unzip(),
+        _ => {
+            return syn::Error::new_spanned(
+                account_strct,
+                "account only supports structs with named fields",
+            )
+            .to_compile_error()
+            .into();
+        }
+    };
+
+    let borsh_impls = if is_zero_copy {
+        quote!()
+    } else {
+        quote! {
+            #[automatically_derived]
+            impl #impl_gen borsh::BorshSerialize for #account_name #type_gen #where_clause {
+                fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+                    writer.write_all(Self::DISCRIMINATOR)?;
+                    #(borsh::BorshSerialize::serialize(&self.#field_names, writer)?;)*
+                    Ok(())
+                }
+            }
+
+            #[automatically_derived]
+            impl #impl_gen borsh::BorshDeserialize for #account_name #type_gen #where_clause {
+                fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+                    // Read and verify discriminator
+                    let mut discriminator = [0u8; 8];
+                    reader.read_exact(&mut discriminator)?;
+
+                    if discriminator != Self::DISCRIMINATOR {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!(
+                                "Invalid account discriminator for {}: expected {:?}, got {:?}",
+                                stringify!(#account_name),
+                                Self::DISCRIMINATOR,
+                                discriminator
+                            ),
+                        ));
+                    }
+
+                    // Deserialize each field
+                    #(
+                        let #field_names = <#field_types as borsh::BorshDeserialize>::deserialize_reader(reader)?;
+                    )*
+
+                    Ok(Self {
+                        #(#field_names),*
+                    })
+                }
+            }
+        }
+    };
+
+    let ret = quote! {
+        #account_strct
+
+        #[automatically_derived]
+        impl #impl_gen anchor_discriminators::Discriminator for #account_name #type_gen #where_clause {
+            const DISCRIMINATOR: &'static [u8] = &#discriminator;
+        }
+
+        #borsh_impls
+    };
+
+    #[allow(unreachable_code)]
+    proc_macro::TokenStream::from(ret)
 }

@@ -41,6 +41,9 @@ default = ["devnet-amplifier"]
 
 [dependencies]
 anchor-discriminators-macros.workspace = true
+anchor-discriminators.workspace = true
+event-cpi-macros.workspace = true
+event-cpi.workspace = true
 solana-program.workspace = true
 program-utils = { workspace = true, default-features = false }
 governance-gmp.workspace = true
@@ -52,6 +55,8 @@ axelar-solana-gateway = { workspace = true, features = ["no-entrypoint"] }
 role-management.workspace = true
 
 [dev-dependencies]
+anyhow.workspace = true
+event-cpi-test-utils.workspace = true
 solana-logger.workspace = true
 solana-program-test.workspace = true
 solana-sdk.workspace = true

@@ -790,9 +790,6 @@ dependencies = [
  "solana-program",
  "solana-program-test",
  "solana-sdk",
- "spl-associated-token-account 6.0.0",
- "spl-token 6.0.0",
- "spl-token-2022 6.0.0",
 ]
 
 [[package]]
@@ -868,7 +865,9 @@ version = "0.1.0"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
+ "anchor-discriminators",
  "anchor-discriminators-macros",
+ "anyhow",
  "axelar-solana-encoding",
  "axelar-solana-gateway",
  "axelar-solana-gateway-test-fixtures",
@@ -877,6 +876,9 @@ dependencies = [
  "borsh 1.5.7",
  "dummy-axelar-solana-gateway",
  "ethers",
+ "event-cpi",
+ "event-cpi-macros",
+ "event-cpi-test-utils",
  "governance-gmp",
  "program-utils",
  "role-management",

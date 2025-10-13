@@ -36,7 +36,7 @@ enum RelayerAccount {
 	Account(AccountMeta),
 	IncomingMessage(),
 	MessagePayload(),
-	Payer(uint64)
+	Payer(Uint64)
 }
 struct RelayerInstruction {
 	program: Pubkey,
@@ -46,7 +46,7 @@ struct RelayerInstruction {
 
 struct RelayerTransaction {
 	is_final: bool,
-	// TODO: solana supports a series of instructions in a single transaction,
+	// solana supports a series of instructions in a single transaction,
 	// do we want to support that or just use a single instruction?
 	instructions: Vec<RelayerInstruction>,
 }

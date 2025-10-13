@@ -50,7 +50,6 @@ governance-gmp.workspace = true
 borsh.workspace = true
 axelar-solana-encoding.workspace = true
 alloy-sol-types.workspace = true
-base64.workspace = true
 axelar-solana-gateway = { workspace = true, features = ["no-entrypoint"] }
 role-management.workspace = true
 

@@ -16,7 +16,7 @@ use solana_program::pubkey::Pubkey;
 ensure_single_feature!("devnet-amplifier", "stagenet", "testnet", "mainnet");
 
 #[cfg(feature = "devnet-amplifier")]
-solana_program::declare_id!("gasd4em72NAm7faq5dvjN5GkXE59dUkTThWmYDX95bK");
+solana_program::declare_id!("gasCUBEiWuRapA5suZeWDPBm6TybtHnkoLQsBRCgMiA");
 
 #[cfg(feature = "stagenet")]
 solana_program::declare_id!("gaspfz1SLfPr1zmackMVMgShjkuCGPZ5taN8wAfwreW");

@@ -804,6 +804,9 @@ pub enum InterchainTokenServiceInstruction {
     Execute {
         /// The GMP metadata
         message: Message,
+
+        /// The ITS payload
+        payload: Vec<u8>,
     },
 }
 
@@ -833,9 +836,6 @@ pub struct ExecuteInstructionInputs {
 
     /// The PDA used to track the message status by the gateway program.
     pub(crate) incoming_message_pda: Pubkey,
-
-    /// The PDA used to store the message payload.
-    pub(crate) message_payload_pda: Pubkey,
 
     /// The Axelar GMP metadata.
     pub(crate) message: Message,
@@ -1990,12 +1990,10 @@ pub fn set_flow_limit(
 ///
 /// [`ProgramError::BorshIoError`]: When instruction serialization fails.
 pub fn execute(inputs: ExecuteInstructionInputs) -> Result<Instruction, ProgramError> {
-    let mut accounts = prefix_accounts(
-        &inputs.payer,
-        &inputs.incoming_message_pda,
-        &inputs.message_payload_pda,
-        &inputs.message,
-    );
+    let mut accounts =
+        prefix_accounts(&inputs.payer, &inputs.incoming_message_pda, &inputs.message);
+
+    let encoded_payload = inputs.payload.encode();
 
     let unwrapped_payload = match inputs.payload {
         GMPPayload::InterchainTransfer(_)
@@ -2015,6 +2013,7 @@ pub fn execute(inputs: ExecuteInstructionInputs) -> Result<Instruction, ProgramE
 
     let data = to_vec(&InterchainTokenServiceInstruction::Execute {
         message: inputs.message,
+        payload: encoded_payload,
     })?;
 
     Ok(Instruction {
@@ -2150,7 +2149,6 @@ pub fn accept_operatorship(
 fn prefix_accounts(
     payer: &Pubkey,
     gateway_incoming_message_pda: &Pubkey,
-    gateway_message_payload_pda: &Pubkey,
     message: &Message,
 ) -> Vec<AccountMeta> {
     let command_id = command_id(&message.cc_id.chain, &message.cc_id.id);
@@ -2166,7 +2164,6 @@ fn prefix_accounts(
     vec![
         AccountMeta::new(*payer, true),
         AccountMeta::new(*gateway_incoming_message_pda, false),
-        AccountMeta::new_readonly(*gateway_message_payload_pda, false),
         AccountMeta::new_readonly(gateway_approved_message_signing_pda, false),
         AccountMeta::new_readonly(gateway_root_pda, false),
         AccountMeta::new_readonly(gateway_event_authority, false),

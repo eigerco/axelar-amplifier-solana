@@ -131,16 +131,19 @@ pub fn validate_with_raw_payload(
     let accounts_iter = &mut accounts.iter();
     let incoming_message_pda = next_account_info(accounts_iter)?;
 
+    let incoming_message_payload_hash;
     let signing_pda_bump = {
         // scope to release the account after reading the data we want
         let incoming_message_data = incoming_message_pda.try_borrow_data()?;
         let incoming_message = IncomingMessage::read(&incoming_message_data)
             .ok_or(GatewayError::BytemuckDataLenInvalid)?;
+
+        incoming_message_payload_hash = incoming_message.payload_hash;
         incoming_message.signing_pda_bump
     };
 
     let payload_hash = solana_program::keccak::hash(payload).to_bytes();
-    if payload_hash != message.payload_hash {
+    if payload_hash != incoming_message_payload_hash {
         return Err(ProgramError::InvalidAccountData);
     }
 

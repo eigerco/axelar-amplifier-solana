@@ -83,7 +83,7 @@ pub fn validate_message(
         instruction.encoding_scheme,
     );
 
-    // Check:Payload hash matches IncomingMessage's
+    // Check: Payload hash matches IncomingMessage's
     let payload_hash = payload.hash()?.0;
     if *payload_hash != incoming_message_payload_hash {
         return Err(ProgramError::InvalidAccountData);

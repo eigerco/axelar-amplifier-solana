@@ -115,7 +115,7 @@ After the Relayer reports the event to Amplifier API about a message being appro
 | Relayer calls the `destination program`| 1 | Composes a tx using `axelar-executable` |
 | `Destination program` (via `axelar-executable`) Calls [`Validate Message`](https://github.com/eigerco/axelar-amplifier-solana/blob/033bd17df32920eb6b57a0e6b8d3f82298b0c5ff/solana/programs/axelar-solana-gateway/src/processor/validate_message.rs). | Internal CPI of 👆 | <ol><li>The `destination program` needs to craft a `signing pda` to ensure that the given `program id` is the message's desired recipient (akin to `msg.sender` on Solidity). </li><li>`Incoming Message PDA` status gets set to `executed`</li><li>event gets emitted</li></ol> |
 
-**Artifact:** Message has been successfully executed; `Incoming Message PDA` marked as `executed`; `Message Payload PDA` has been closed, and funds refunded to the Relayer.
+**Artifact:** Message has been successfully executed; `Incoming Message PDA` marked as `executed`.
 
 ### Verifier rotation
 
